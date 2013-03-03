@@ -2833,7 +2833,7 @@ bool CApplication::OnAction(const CAction &action)
       if(core != EPC_NONE)
       {
         g_application.m_eForcedNextPlayer = core;
-        item.m_lStartOffset = GetTime() * 75;
+        item.m_lStartOffset = (int)(GetTime() * 75);
         PlayFile(item, true);
       }
     }
@@ -5380,7 +5380,7 @@ int CApplication::GetSubtitleDelay() const
 
 int CApplication::GetAudioDelay() const
 {
-  // converts subtitle delay to a percentage
+  // converts audio delay to a percentage
   return int(((float)(g_settings.m_currentVideoSettings.m_AudioDelay + g_advancedSettings.m_videoAudioDelayRange)) / (2 * g_advancedSettings.m_videoAudioDelayRange)*100.0f + 0.5f);
 }
 

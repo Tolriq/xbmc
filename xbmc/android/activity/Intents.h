@@ -1,7 +1,7 @@
 #pragma once
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *      Copyright (C) 2013 Team XBMC
+ *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,23 +18,18 @@
  *  <http://www.gnu.org/licenses/>.
  *
  */
+#include <string>
+#include <jni.h>
 
-#include "peripherals/bus/PeripheralBus.h"
-#include "peripherals/devices/Peripheral.h"
-
-namespace PERIPHERALS
+class CAndroidIntents
 {
-  class CPeripherals;
+public:
+  void ReceiveIntent(JNIEnv *env, const jobject &intent);
+  static CAndroidIntents& getInstance() {static CAndroidIntents temp; return temp;};
 
-  class CPeripheralBusRPi : public CPeripheralBus
-  {
-  public:
-    CPeripheralBusRPi(CPeripherals *manager);
-    virtual ~CPeripheralBusRPi(void) {};
-
-    bool PerformDeviceScan(PeripheralScanResults &results);
-
-  private:
-    bool FindAdapter(void);
-  };
-}
+private:
+  CAndroidIntents();
+  CAndroidIntents(CAndroidIntents const&);
+  void operator=(CAndroidIntents const&);
+  std::string GetIntentAction(const jobject &intent);
+};

@@ -340,8 +340,7 @@ void CCurlFile::CReadState::Disconnect()
 
 CCurlFile::~CCurlFile()
 {
-  if (m_opened)
-    Close();
+  Close();
   delete m_state;
   g_curlInterface.Unload();
 }
@@ -467,7 +466,10 @@ void CCurlFile::SetCommonOptions(CReadState* state)
   g_curlInterface.easy_setopt(h, CURLOPT_FAILONERROR, 1);
 
   // enable support for icecast / shoutcast streams
-  m_curlAliasList = g_curlInterface.slist_append(m_curlAliasList, "ICY 200 OK");
+  if ( NULL == m_curlAliasList )
+    // m_curlAliasList is used only by this one place, but SetCommonOptions can
+    // be called multiple times, only append to list if it's empty.
+    m_curlAliasList = g_curlInterface.slist_append(m_curlAliasList, "ICY 200 OK");
   g_curlInterface.easy_setopt(h, CURLOPT_HTTP200ALIASES, m_curlAliasList);
 
   // never verify peer, we don't have any certificates to do this
@@ -573,6 +575,13 @@ void CCurlFile::SetCommonOptions(CReadState* state)
 
   // Set the lowspeed time very low as it seems Curl takes much longer to detect a lowspeed condition
   g_curlInterface.easy_setopt(h, CURLOPT_LOW_SPEED_TIME, m_lowspeedtime);
+
+  if (m_skipshout)
+    // For shoutcast file, content-length should not be set, and in libcurl there is a bug, if the
+    // cast file was 302 redirected then getinfo of CURLINFO_CONTENT_LENGTH_DOWNLOAD will return
+    // the 302 response's body length, which cause the next read request failed, so we ignore
+    // content-length for shoutcast file to workaround this.
+    g_curlInterface.easy_setopt(h, CURLOPT_IGNORE_CONTENT_LENGTH, 1);
 }
 
 void CCurlFile::SetRequestHeaders(CReadState* state)
@@ -1086,7 +1095,11 @@ bool CCurlFile::Exists(const CURL& url)
   if(url2.GetProtocol() == "ftp")
   {
     g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FILETIME, 1);
-    g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_NOCWD);
+    // nocwd is less standard, will return empty list for non-existed remote dir on some ftp server, avoid it.
+    if (url2.GetFileName().Right(1).Equals("/"))
+      g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_SINGLECWD);
+    else
+      g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_NOCWD);
   }
 
   CURLcode result = g_curlInterface.easy_perform(m_state->m_easyHandle);
@@ -1211,7 +1224,11 @@ int CCurlFile::Stat(const CURL& url, struct __stat64* buffer)
 
   if(url2.GetProtocol() == "ftp")
   {
-    g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_NOCWD);
+    // nocwd is less standard, will return empty list for non-existed remote dir on some ftp server, avoid it.
+    if (url2.GetFileName().Right(1).Equals("/"))
+      g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_SINGLECWD);
+    else
+      g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_FTP_FILEMETHOD, CURLFTPMETHOD_NOCWD);
   }
 
   CURLcode result = g_curlInterface.easy_perform(m_state->m_easyHandle);
