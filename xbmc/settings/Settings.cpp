@@ -55,6 +55,10 @@
 #include "filesystem/File.h"
 #include "filesystem/DirectoryCache.h"
 #include "DatabaseManager.h"
+#ifdef HAS_UPNP
+#include "network/upnp/UPnPSettings.h"
+#endif
+#include "utils/RssManager.h"
 
 using namespace std;
 using namespace XFILE;
@@ -137,9 +141,7 @@ void CSettings::Initialize()
 }
 
 CSettings::~CSettings(void)
-{
-  Clear();
-}
+{ }
 
 
 void CSettings::Save() const
@@ -177,7 +179,7 @@ bool CSettings::Load()
   }
 
   LoadSources();
-  LoadRSSFeeds();
+  CRssManager::Get().Load();
   LoadUserFolderLayout();
 
   return true;
@@ -700,7 +702,6 @@ bool CSettings::LoadSettings(const CStdString& strSettingsFile)
     GetViewState(pElement, "musicnavartists", m_viewStateMusicNavArtists);
     GetViewState(pElement, "musicnavalbums", m_viewStateMusicNavAlbums);
     GetViewState(pElement, "musicnavsongs", m_viewStateMusicNavSongs);
-    GetViewState(pElement, "musiclastfm", m_viewStateMusicLastFM);
     GetViewState(pElement, "videonavactors", m_viewStateVideoNavActors);
     GetViewState(pElement, "videonavyears", m_viewStateVideoNavYears);
     GetViewState(pElement, "videonavgenres", m_viewStateVideoNavGenres);
@@ -789,8 +790,8 @@ bool CSettings::LoadSettings(const CStdString& strSettingsFile)
   LoadSkinSettings(pRootElement);
 
   // Configure the PlayerCoreFactory
-  LoadPlayerCoreFactorySettings("special://xbmc/system/playercorefactory.xml", true);
-  LoadPlayerCoreFactorySettings(GetUserDataItem("playercorefactory.xml"), false);
+  CPlayerCoreFactory::Get().LoadConfiguration("special://xbmc/system/playercorefactory.xml", true);
+  CPlayerCoreFactory::Get().LoadConfiguration(GetUserDataItem("playercorefactory.xml"), false);
 
   // Advanced settings
   g_advancedSettings.Load();
@@ -817,25 +818,6 @@ bool CSettings::LoadSettings(const CStdString& strSettingsFile)
   }  
   CLog::SetLogLevel(g_advancedSettings.m_logLevel);
   return true;
-}
-
-bool CSettings::LoadPlayerCoreFactorySettings(const CStdString& fileStr, bool clear)
-{
-  CLog::Log(LOGNOTICE, "Loading player core factory settings from %s.", fileStr.c_str());
-  if (!CFile::Exists(fileStr))
-  { // tell the user it doesn't exist
-    CLog::Log(LOGNOTICE, "%s does not exist. Skipping.", fileStr.c_str());
-    return false;
-  }
-
-  CXBMCTinyXML playerCoreFactoryXML;
-  if (!playerCoreFactoryXML.LoadFile(fileStr))
-  {
-    CLog::Log(LOGERROR, "Error loading %s, Line %d (%s)", fileStr.c_str(), playerCoreFactoryXML.ErrorRow(), playerCoreFactoryXML.ErrorDesc());
-    return false;
-  }
-
-  return CPlayerCoreFactory::LoadConfiguration(playerCoreFactoryXML.RootElement(), clear);
 }
 
 bool CSettings::SaveSettings(const CStdString& strSettingsFile, CGUISettings *localSettings /* = NULL */) const
@@ -895,7 +877,6 @@ bool CSettings::SaveSettings(const CStdString& strSettingsFile, CGUISettings *lo
     SetViewState(pNode, "musicnavartists", m_viewStateMusicNavArtists);
     SetViewState(pNode, "musicnavalbums", m_viewStateMusicNavAlbums);
     SetViewState(pNode, "musicnavsongs", m_viewStateMusicNavSongs);
-    SetViewState(pNode, "musiclastfm", m_viewStateMusicLastFM);
     SetViewState(pNode, "videonavactors", m_viewStateVideoNavActors);
     SetViewState(pNode, "videonavyears", m_viewStateVideoNavYears);
     SetViewState(pNode, "videonavgenres", m_viewStateVideoNavGenres);
@@ -1147,60 +1128,6 @@ bool CSettings::SaveProfiles(const CStdString& profilesFile) const
 
   // save the file
   return xmlDoc.SaveFile(profilesFile);
-}
-
-bool CSettings::LoadUPnPXml(const CStdString& strSettingsFile)
-{
-  CXBMCTinyXML UPnPDoc;
-
-  if (!CFile::Exists(strSettingsFile))
-  { // set defaults, or assume no rss feeds??
-    return false;
-  }
-  if (!UPnPDoc.LoadFile(strSettingsFile))
-  {
-    CLog::Log(LOGERROR, "Error loading %s, Line %d\n%s", strSettingsFile.c_str(), UPnPDoc.ErrorRow(), UPnPDoc.ErrorDesc());
-    return false;
-  }
-
-  TiXmlElement *pRootElement = UPnPDoc.RootElement();
-  if (!pRootElement || strcmpi(pRootElement->Value(),"upnpserver") != 0)
-  {
-    CLog::Log(LOGERROR, "Error loading %s, no <upnpserver> node", strSettingsFile.c_str());
-    return false;
-  }
-  // load settings
-
-  // default values for ports
-  m_UPnPPortServer = 0;
-  m_UPnPPortRenderer = 0;
-  m_UPnPMaxReturnedItems = 0;
-
-  XMLUtils::GetString(pRootElement, "UUID", m_UPnPUUIDServer);
-  XMLUtils::GetInt(pRootElement, "Port", m_UPnPPortServer);
-  XMLUtils::GetInt(pRootElement, "MaxReturnedItems", m_UPnPMaxReturnedItems);
-  XMLUtils::GetString(pRootElement, "UUIDRenderer", m_UPnPUUIDRenderer);
-  XMLUtils::GetInt(pRootElement, "PortRenderer", m_UPnPPortRenderer);
-
-  return true;
-}
-
-bool CSettings::SaveUPnPXml(const CStdString& strSettingsFile) const
-{
-  CXBMCTinyXML xmlDoc;
-  TiXmlElement xmlRootElement("upnpserver");
-  TiXmlNode *pRoot = xmlDoc.InsertEndChild(xmlRootElement);
-  if (!pRoot) return false;
-
-  // create a new Element for UUID
-  XMLUtils::SetString(pRoot, "UUID", m_UPnPUUIDServer);
-  XMLUtils::SetInt(pRoot, "Port", m_UPnPPortServer);
-  XMLUtils::SetInt(pRoot, "MaxReturnedItems", m_UPnPMaxReturnedItems);
-  XMLUtils::SetString(pRoot, "UUIDRenderer", m_UPnPUUIDRenderer);
-  XMLUtils::SetInt(pRoot, "PortRenderer", m_UPnPPortRenderer);
-
-  // save the file
-  return xmlDoc.SaveFile(strSettingsFile);
 }
 
 bool CSettings::UpdateShare(const CStdString &type, const CStdString oldName, const CMediaSource &share)
@@ -1483,7 +1410,6 @@ void CSettings::Clear()
   m_logFolder.clear();
   m_userAgent.clear();
 
-  m_mapRssUrls.clear();
   m_skinStrings.clear();
   m_skinBools.clear();
 
@@ -1499,11 +1425,13 @@ void CSettings::Clear()
   m_defaultFileSource.clear();
   m_defaultMusicLibSource.clear();
 
-  m_UPnPUUIDServer.clear();
-  m_UPnPUUIDRenderer.clear();
-
   m_ResInfo.clear();
   m_Calibrations.clear();
+
+#ifdef HAS_UPNP
+  CUPnPSettings::Get().Clear();
+#endif
+  CRssManager::Get().Clear();
 }
 
 int CSettings::TranslateSkinString(const CStdString &setting)
@@ -1787,65 +1715,6 @@ CStdString CSettings::GetSourcesFile() const
     URIUtils::AddFileToFolder(GetUserDataFolder(),"sources.xml",folder);
 
   return folder;
-}
-
-void CSettings::LoadRSSFeeds()
-{
-  CStdString rssXML;
-  rssXML = GetUserDataItem("RssFeeds.xml");
-  CXBMCTinyXML rssDoc;
-  if (!CFile::Exists(rssXML))
-  { // set defaults, or assume no rss feeds??
-    return;
-  }
-  if (!rssDoc.LoadFile(rssXML))
-  {
-    CLog::Log(LOGERROR, "Error loading %s, Line %d\n%s", rssXML.c_str(), rssDoc.ErrorRow(), rssDoc.ErrorDesc());
-    return;
-  }
-
-  TiXmlElement *pRootElement = rssDoc.RootElement();
-  if (!pRootElement || strcmpi(pRootElement->Value(),"rssfeeds") != 0)
-  {
-    CLog::Log(LOGERROR, "Error loading %s, no <rssfeeds> node", rssXML.c_str());
-    return;
-  }
-
-  m_mapRssUrls.clear();
-  TiXmlElement* pSet = pRootElement->FirstChildElement("set");
-  while (pSet)
-  {
-    int iId;
-    if (pSet->QueryIntAttribute("id", &iId) == TIXML_SUCCESS)
-    {
-      RssSet set;
-      set.rtl = pSet->Attribute("rtl") && strcasecmp(pSet->Attribute("rtl"),"true")==0;
-      TiXmlElement* pFeed = pSet->FirstChildElement("feed");
-      while (pFeed)
-      {
-        int iInterval;
-        if ( pFeed->QueryIntAttribute("updateinterval",&iInterval) != TIXML_SUCCESS)
-        {
-          iInterval=30; // default to 30 min
-          CLog::Log(LOGDEBUG,"no interval set, default to 30!");
-        }
-        if (pFeed->FirstChild())
-        {
-          // TODO: UTF-8: Do these URLs need to be converted to UTF-8?
-          //              What about the xml encoding?
-          CStdString strUrl = pFeed->FirstChild()->Value();
-          set.url.push_back(strUrl);
-          set.interval.push_back(iInterval);
-        }
-        pFeed = pFeed->NextSiblingElement("feed");
-      }
-      m_mapRssUrls.insert(make_pair(iId,set));
-    }
-    else
-      CLog::Log(LOGERROR,"found rss url set with no id in RssFeeds.xml, ignored");
-
-    pSet = pSet->NextSiblingElement("set");
-  }
 }
 
 CStdString CSettings::GetSettingsFile() const

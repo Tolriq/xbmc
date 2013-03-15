@@ -148,6 +148,7 @@ CCoreAudioAEStream::~CCoreAudioAEStream()
   //_aligned_free(m_resampleBuffer); m_resampleBuffer = NULL;
   _aligned_free(m_remapBuffer); m_remapBuffer = NULL;
   _aligned_free(m_vizRemapBuffer); m_vizRemapBuffer = NULL;
+  _aligned_free(m_upmixBuffer); m_upmixBuffer = NULL;
 
   delete m_Buffer; m_Buffer = NULL;
 
@@ -596,6 +597,10 @@ void CCoreAudioAEStream::Pause()
 
 void CCoreAudioAEStream::Resume()
 {
+#if defined(TARGET_DARWIN_IOS) && !defined(TARGET_DARWIN_IOS_ATV)
+  if (CAEFactory::IsSuspended())
+    CAEFactory::Resume();
+#endif
   m_paused = false;
 }
 

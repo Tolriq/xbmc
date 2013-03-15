@@ -36,7 +36,7 @@
 #ifdef MID
 #define DEFAULT_VSYNC       VSYNC_DISABLED
 #else  // MID
-#if defined(TARGET_DARWIN) || defined(_WIN32)
+#if defined(TARGET_DARWIN) || defined(_WIN32) || defined(TARGET_RASPBERRY_PI)
 #define DEFAULT_VSYNC       VSYNC_ALWAYS
 #else
 #define DEFAULT_VSYNC       VSYNC_DRIVER
@@ -170,7 +170,6 @@ public:
   CViewState m_viewStateMusicNavArtists;
   CViewState m_viewStateMusicNavAlbums;
   CViewState m_viewStateMusicNavSongs;
-  CViewState m_viewStateMusicLastFM;
   CViewState m_viewStateVideoNavActors;
   CViewState m_viewStateVideoNavYears;
   CViewState m_viewStateVideoNavGenres;
@@ -217,14 +216,6 @@ public:
 
   CStdString m_userAgent;
 
-  struct RssSet
-  {
-    bool rtl;
-    std::vector<int> interval;
-    std::vector<std::string> url;
-  };
-
-  std::map<int,RssSet> m_mapRssUrls;
   std::map<int, CSkinString> m_skinStrings;
   std::map<int, CSkinBool> m_skinBools;
 
@@ -239,12 +230,6 @@ public:
   CStdString m_defaultPictureSource;
   CStdString m_defaultFileSource;
   CStdString m_defaultMusicLibSource;
-
-  CStdString m_UPnPUUIDServer;
-  int        m_UPnPPortServer;
-  int        m_UPnPMaxReturnedItems;
-  CStdString m_UPnPUUIDRenderer;
-  int        m_UPnPPortRenderer;
 
   int        m_musicNeedsUpdate; ///< if a database update means an update is required (set to the version number of the db)
   int        m_videoNeedsUpdate; ///< if a database update means an update is required (set to the version number of the db)
@@ -347,9 +332,6 @@ public:
 
   CStdString GetSettingsFile() const;
 
-  bool LoadUPnPXml(const CStdString& strSettingsFile);
-  bool SaveUPnPXml(const CStdString& strSettingsFile) const;
-
   /*! \brief Load the user profile information from disk
    Loads the profiles.xml file and creates the list of profiles. If no profiles
    exist, a master user is created.  Should be called after special://masterprofile/
@@ -370,7 +352,6 @@ public:
   void LoadSources();
   bool SaveSources();
 
-  void LoadRSSFeeds();
   bool GetInteger(const TiXmlElement* pRootElement, const char *strTagName, int& iValue, const int iDefault, const int iMin, const int iMax);
   bool GetFloat(const TiXmlElement* pRootElement, const char *strTagName, float& fValue, const float fDefault, const float fMin, const float fMax);
   static bool GetPath(const TiXmlElement* pRootElement, const char *tagName, CStdString &strValue);
@@ -393,8 +374,6 @@ protected:
 
   bool LoadSettings(const CStdString& strSettingsFile);
 //  bool SaveSettings(const CStdString& strSettingsFile) const;
-
-  bool LoadPlayerCoreFactorySettings(const CStdString& fileStr, bool clear);
 
   // skin activated settings
   void LoadSkinSettings(const TiXmlElement* pElement);

@@ -2,8 +2,8 @@
 <!-- BEGIN_INCLUDE(manifest) -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.xbmc.xbmc"
-    android:versionCode="7"
-    android:versionName="13.0-ALPHA1" >
+    android:versionCode="8"
+    android:versionName="13.0-ALPHA2" >
 
     <!-- This is the platform API where NativeActivity was introduced. -->
     <uses-sdk android:minSdkVersion="9" />
@@ -32,7 +32,7 @@
              This will take care of integrating with our NDK code.
         -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".Main"
             android:configChanges="orientation|keyboardHidden"
             android:finishOnTaskLaunch="true"
             android:label="XBMC"

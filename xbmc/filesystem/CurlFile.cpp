@@ -288,9 +288,22 @@ bool CCurlFile::CReadState::Seek(int64_t pos)
   return false;
 }
 
+void CCurlFile::CReadState::SetResume(void)
+{
+  /*
+   * Use RANGE method for resuming. We used to use RESUME_FROM_LARGE for this but some http servers
+   * require us to always send the range request header. If we don't the server may provide different
+   * content causing seeking to fail. Note that internally Curl will automatically handle this for FTP
+   * so we don't need to worry about that here.
+   */
+  char str[21];
+  sprintf(str, "%"PRId64"-", m_filePos);
+  g_curlInterface.easy_setopt(m_easyHandle, CURLOPT_RANGE, str);
+}
+
 long CCurlFile::CReadState::Connect(unsigned int size)
 {
-  g_curlInterface.easy_setopt(m_easyHandle, CURLOPT_RESUME_FROM_LARGE, m_filePos);
+  SetResume();
   g_curlInterface.multi_add_handle(m_multiHandle, m_easyHandle);
 
   m_bufferSize = size;
@@ -736,30 +749,17 @@ void CCurlFile::ParseAndCorrectUrl(CURL &url2)
     m_password = url2.GetPassWord();
 
     // handle any protocol options
-    CStdString options = url2.GetProtocolOptions();
-    options.TrimRight('/'); // hack for trailing slashes being added from source
-    if (options.length() > 0)
+    std::map<CStdString, CStdString> options;
+    url2.GetProtocolOptions(options);
+    if (options.size() > 0)
     {
       // clear protocol options
       url2.SetProtocolOptions("");
       // set xbmc headers
-      CStdStringArray array;
-      CUtil::Tokenize(options, array, "&");
-      for(CStdStringArray::iterator it = array.begin(); it != array.end(); it++)
+      for(std::map<CStdString, CStdString>::const_iterator it = options.begin(); it != options.end(); ++it)
       {
-        // parse name, value
-        CStdString name, value;
-        int pos = it->Find('=');
-        if(pos >= 0)
-        {
-          name = it->Left(pos);
-          value = it->Mid(pos+1, it->size());
-        }
-        else
-        {
-          name = (*it);
-          value = "";
-        }
+        const CStdString &name = it->first;
+        CStdString value = it->second;
 
         // url decode value
         CURL::Decode(value);
@@ -1436,7 +1436,7 @@ bool CCurlFile::CReadState::FillBuffer(unsigned int want)
         CLog::Log(LOGWARNING, "%s: Reconnect, (re)try %i", __FUNCTION__, retry);
 
         // Connect + seek to current position (again)
-        g_curlInterface.easy_setopt(m_easyHandle, CURLOPT_RESUME_FROM_LARGE, m_filePos);
+        SetResume();
         g_curlInterface.multi_add_handle(m_multiHandle, m_easyHandle);
 
         // Return to the beginning of the loop:

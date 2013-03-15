@@ -812,17 +812,12 @@ int COMXVideo::Decode(uint8_t *pData, int iSize, double dts, double pts)
         // only send dts on first frame to get nearly correct starttime
         if(pts == DVD_NOPTS_VALUE)
           pts = dts;
-        if(pts == DVD_NOPTS_VALUE)
-          omx_buffer->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
-        omx_buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
+        omx_buffer->nFlags |= OMX_BUFFERFLAG_STARTTIME;
         CLog::Log(LOGDEBUG, "OMXVideo::Decode VDec : setStartTime %f\n", (pts == DVD_NOPTS_VALUE ? 0.0 : pts) / DVD_TIME_BASE);
         m_av_clock->VideoStart(false);
       }
-      else
-      {
-        if(pts == DVD_NOPTS_VALUE)
-          omx_buffer->nFlags = OMX_BUFFERFLAG_TIME_UNKNOWN;
-      }
+      if(pts == DVD_NOPTS_VALUE)
+        omx_buffer->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
 
       omx_buffer->nTimeStamp = ToOMXTime((uint64_t)(pts == DVD_NOPTS_VALUE) ? 0 : pts);
       omx_buffer->nFilledLen = (demuxer_bytes > omx_buffer->nAllocLen) ? omx_buffer->nAllocLen : demuxer_bytes;
@@ -890,10 +885,10 @@ int COMXVideo::Decode(uint8_t *pData, int iSize, double dts, double pts)
           {
             CLog::Log(LOGERROR, "%s::%s - error m_omx_image_fx.SetParameter(OMX_IndexParamPortDefinition) omx_err(0x%08x)\n", CLASSNAME, __func__, omx_err);
           }
-          omx_err = m_omx_decoder.WaitForEvent(OMX_EventPortSettingsChanged);
+          omx_err = m_omx_image_fx.WaitForEvent(OMX_EventPortSettingsChanged);
           if(omx_err != OMX_ErrorNone)
           {
-             CLog::Log(LOGERROR, "%s::%s - error m_omx_decoder.WaitForEvent(OMX_EventPortSettingsChanged) omx_err(0x%08x)\n", CLASSNAME, __func__, omx_err);
+             CLog::Log(LOGERROR, "%s::%s - error m_omx_image_fx.WaitForEvent(OMX_EventPortSettingsChanged) omx_err(0x%08x)\n", CLASSNAME, __func__, omx_err);
           }
           port_image.nPortIndex = m_omx_image_fx.GetOutputPort();
           omx_err = m_omx_image_fx.GetParameter(OMX_IndexParamPortDefinition, &port_image);

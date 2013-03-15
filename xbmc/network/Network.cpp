@@ -22,9 +22,7 @@
 #include "Network.h"
 #include "Application.h"
 #include "ApplicationMessenger.h"
-#include "libscrobbler/lastfmscrobbler.h"
-#include "libscrobbler/librefmscrobbler.h"
-#include "utils/RssReader.h"
+#include "utils/RssManager.h"
 #include "utils/log.h"
 #include "guilib/LocalizeStrings.h"
 #include "dialogs/GUIDialogKaiToast.h"
@@ -302,9 +300,7 @@ void CNetwork::StartServices()
 #ifdef HAS_AIRPLAY
   g_application.StartAirplayServer();
 #endif
-  CLastfmScrobbler::GetInstance()->Init();
-  CLibrefmScrobbler::GetInstance()->Init();
-  g_rssManager.Start();
+  CRssManager::Get().Start();
 }
 
 void CNetwork::StopServices(bool bWait)
@@ -320,11 +316,9 @@ void CNetwork::StopServices(bool bWait)
 #ifdef HAS_WEB_SERVER
     g_application.StopWebServer();
 #endif    
-    CLastfmScrobbler::GetInstance()->Term();
-    CLibrefmScrobbler::GetInstance()->Term();
     // smb.Deinit(); if any file is open over samba this will break.
 
-    g_rssManager.Stop();
+    CRssManager::Get().Stop();
   }
 
 #ifdef HAS_EVENT_SERVER
