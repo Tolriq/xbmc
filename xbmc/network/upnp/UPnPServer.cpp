@@ -11,8 +11,9 @@
 #include "filesystem/MusicDatabaseDirectory.h"
 #include "filesystem/SpecialProtocol.h"
 #include "filesystem/VideoDatabaseDirectory.h"
-#include "guilib/Key.h"
+#include "guilib/WindowIDs.h"
 #include "music/tags/MusicInfoTag.h"
+#include "settings/Settings.h"
 #include "settings/GUISettings.h"
 #include "utils/log.h"
 #include "utils/md5.h"
@@ -307,6 +308,8 @@ CUPnPServer::Build(CFileItemPtr                  item,
 
                     if (params.GetMovieId() >= 0 )
                         db.GetMovieInfo((const char*)path, *item->GetVideoInfoTag(), params.GetMovieId());
+                    else if (params.GetMVideoId() >= 0 )
+                        db.GetMusicVideoInfo((const char*)path, *item->GetVideoInfoTag(), params.GetMVideoId());
                     else if (params.GetEpisodeId() >= 0 )
                         db.GetEpisodeInfo((const char*)path, *item->GetVideoInfoTag(), params.GetEpisodeId());
                     else if (params.GetTvShowId() >= 0 )
@@ -600,7 +603,14 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
 
             items.Sort(SORT_METHOD_LABEL, SortOrderAscending);
         } else {
-            CDirectory::GetDirectory((const char*)parent_id, items);
+            // this is the only way to hide unplayable items in the 'files'
+            // view as we cannot tell what context (eg music vs video) the
+            // request came from
+            string supported = g_settings.m_pictureExtensions + "|"
+                             + g_settings.m_videoExtensions + "|"
+                             + g_settings.m_musicExtensions + "|"
+                             + g_settings.m_discStubExtensions;
+            CDirectory::GetDirectory((const char*)parent_id, items, supported);
             DefaultSortItems(items);
         }
 

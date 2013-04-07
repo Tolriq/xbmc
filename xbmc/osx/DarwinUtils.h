@@ -33,6 +33,7 @@ extern "C"
 #endif
   bool        DarwinIsAppleTV2(void);
   bool        DarwinHasRetina(void);
+  const char *GetDarwinOSReleaseString(void);
   const char *GetDarwinVersionString(void);
   float       GetIOSVersion(void);
   int         GetDarwinFrameworkPath(bool forPython, char* path, uint32_t *pathsize);
@@ -41,6 +42,7 @@ extern "C"
   int         DarwinBatteryLevel(void);
   void        DarwinSetScheduling(int message);
   bool        DarwinCFStringRefToString(CFStringRef source, std::string& destination);
+  bool        DarwinCFStringRefToUTF8String(CFStringRef source, std::string& destination);
 #ifdef __cplusplus
 }
 #endif

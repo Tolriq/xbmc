@@ -32,11 +32,13 @@
 #include "playlists/PlayListFactory.h"
 #include "PictureInfoLoader.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/Key.h"
 #include "dialogs/GUIDialogOK.h"
 #include "dialogs/GUIDialogYesNo.h"
 #include "playlists/PlayList.h"
 #include "settings/Settings.h"
 #include "settings/GUISettings.h"
+#include "settings/MediaSourceSettings.h"
 #include "utils/TimeUtils.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
@@ -106,7 +108,7 @@ bool CGUIWindowPictures::OnMessage(CGUIMessage& message)
     {
       // is this the first time accessing this window?
       if (m_vecItems->GetPath() == "?" && message.GetStringParam().IsEmpty())
-        message.SetStringParam(g_settings.m_defaultPictureSource);
+        message.SetStringParam(CMediaSourceSettings::Get().GetDefaultSource("pictures"));
 
       m_dlgProgress = (CGUIDialogProgress*)g_windowManager.GetWindow(WINDOW_DIALOG_PROGRESS);
 
@@ -187,7 +189,8 @@ void CGUIWindowPictures::UpdateButtons()
 
   // check we can slideshow or recursive slideshow
   int nFolders = m_vecItems->GetFolderCount();
-  if (nFolders == m_vecItems->Size())
+  if (nFolders == m_vecItems->Size() ||
+      m_vecItems->GetPath() == "addons://sources/image/")
   {
     CONTROL_DISABLE(CONTROL_BTNSLIDESHOW);
   }
@@ -197,7 +200,8 @@ void CGUIWindowPictures::UpdateButtons()
   }
   if (m_guiState.get() && !m_guiState->HideParentDirItems())
     nFolders--;
-  if (m_vecItems->Size() == 0 || nFolders == 0)
+  if (m_vecItems->Size() == 0 || nFolders == 0 ||
+      m_vecItems->GetPath() == "addons://sources/image/")
   {
     CONTROL_DISABLE(CONTROL_BTNSLIDESHOW_RECURSIVE);
   }
@@ -301,7 +305,7 @@ bool CGUIWindowPictures::GetDirectory(const CStdString &strDirectory, CFileItemL
     return false;
 
   CStdString label;
-  if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), g_settings.GetSourcesFromType("pictures"), &label)) 
+  if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), CMediaSourceSettings::Get().GetSources("pictures"), &label)) 
     items.SetLabel(label);
 
   return true;

@@ -41,9 +41,13 @@
 #include "FileItem.h"
 #include "Application.h"
 #include "ApplicationMessenger.h"
+#include "profiles/ProfilesManager.h"
 #include "settings/Settings.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/GUISettings.h"
+#include "settings/MediaSettings.h"
+#include "settings/MediaSourceSettings.h"
+#include "guilib/Key.h"
 #include "guilib/LocalizeStrings.h"
 #include "storage/MediaManager.h"
 #include "utils/log.h"
@@ -119,7 +123,7 @@ bool CGUIWindowVideoNav::OnMessage(CGUIMessage& message)
 
       SetProperty("flattened", g_settings.m_bMyVideoNavFlatten);
       if (message.GetNumStringParams() && message.GetStringParam(0).Equals("Files") &&
-          g_settings.GetSourcesFromType("video")->empty())
+          CMediaSourceSettings::Get().GetSources("video")->empty())
       {
         message.SetStringParam("");
       }
@@ -160,7 +164,7 @@ bool CGUIWindowVideoNav::OnMessage(CGUIMessage& message)
       }
       else if (iControl == CONTROL_BTNSHOWMODE)
       {
-        g_settings.CycleWatchMode(m_vecItems->GetContent());
+        CMediaSettings::Get().CycleWatchedMode(m_vecItems->GetContent());
         g_settings.Save();
         OnFilterItems(GetProperty("filter").asString());
         return true;
@@ -177,10 +181,10 @@ bool CGUIWindowVideoNav::OnMessage(CGUIMessage& message)
       }
       else if (iControl == CONTROL_BTNSHOWALL)
       {
-        if (g_settings.GetWatchMode(m_vecItems->GetContent()) == VIDEO_SHOW_ALL)
-          g_settings.SetWatchMode(m_vecItems->GetContent(), VIDEO_SHOW_UNWATCHED);
+        if (CMediaSettings::Get().GetWatchedMode(m_vecItems->GetContent()) == WatchedModeAll)
+          CMediaSettings::Get().SetWatchedMode(m_vecItems->GetContent(), WatchedModeUnwatched);
         else
-          g_settings.SetWatchMode(m_vecItems->GetContent(), VIDEO_SHOW_ALL);
+          CMediaSettings::Get().SetWatchedMode(m_vecItems->GetContent(), WatchedModeAll);
         g_settings.Save();
         OnFilterItems(GetProperty("filter").asString());
         return true;
@@ -370,7 +374,7 @@ bool CGUIWindowVideoNav::GetDirectory(const CStdString &strDirectory, CFileItemL
     else if (!items.IsVirtualDirectoryRoot())
     { // load info from the database
       CStdString label;
-      if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), g_settings.GetSourcesFromType("video"), &label)) 
+      if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), CMediaSourceSettings::Get().GetSources("video"), &label)) 
         items.SetLabel(label);
       if (!items.IsSourcesPath())
         LoadVideoInfo(items);
@@ -532,10 +536,10 @@ void CGUIWindowVideoNav::UpdateButtons()
 
   SET_CONTROL_LABEL(CONTROL_FILTER, strLabel);
 
-  int watchMode = g_settings.GetWatchMode(m_vecItems->GetContent());
+  int watchMode = CMediaSettings::Get().GetWatchedMode(m_vecItems->GetContent());
   SET_CONTROL_LABEL(CONTROL_BTNSHOWMODE, g_localizeStrings.Get(16100 + watchMode));
 
-  SET_CONTROL_SELECTED(GetID(), CONTROL_BTNSHOWALL, watchMode != VIDEO_SHOW_ALL);
+  SET_CONTROL_SELECTED(GetID(), CONTROL_BTNSHOWALL, watchMode != WatchedModeAll);
 
   SET_CONTROL_SELECTED(GetID(),CONTROL_BTNPARTYMODE, g_partyModeManager.IsEnabled());
 
@@ -868,7 +872,7 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
     if (g_application.IsVideoScanning())
       buttons.Add(CONTEXT_BUTTON_STOP_SCANNING, 13353);  // Stop Scanning
     if (!item->IsDVD() && item->GetPath() != "add" && !item->IsParentFolder() &&
-        (g_settings.GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
+        (CProfilesManager::Get().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
     {
       CVideoDatabase database;
       database.Open();
@@ -936,7 +940,7 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
         buttons.Add(CONTEXT_BUTTON_INFO, 13346);
 
       // can we update the database?
-      if (g_settings.GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser)
+      if (CProfilesManager::Get().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser)
       {
         if (node == NODE_TYPE_TITLE_TVSHOWS)
         {
@@ -977,6 +981,10 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
             buttons.Add(CONTEXT_BUTTON_UNLINK_MOVIE,20385);
           buttons.Add(CONTEXT_BUTTON_LINK_MOVIE,20384);
         }
+        if (item->HasVideoInfoTag() && item->GetVideoInfoTag()->m_type == "movie") // movie entry
+        {
+          buttons.Add(CONTEXT_BUTTON_SET_MOVIESET,20465); // set or change movie set the movie belongs to
+        }
 
         if (node == NODE_TYPE_SEASONS && item->m_bIsFolder)
           buttons.Add(CONTEXT_BUTTON_SET_SEASON_ART, 13511);
@@ -985,6 +993,7 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
         {
           buttons.Add(CONTEXT_BUTTON_EDIT, 16105);
           buttons.Add(CONTEXT_BUTTON_SET_MOVIESET_ART, 13511);
+          buttons.Add(CONTEXT_BUTTON_MOVIESET_ADD_REMOVE_ITEMS, 20465);
           buttons.Add(CONTEXT_BUTTON_DELETE, 646);
         }
 
@@ -1068,6 +1077,12 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
     }
   }
   CGUIWindowVideoBase::GetNonContextButtons(itemNumber, buttons);
+}
+
+// predicate used by sorting and set_difference
+bool compFileItemsByDbId(const CFileItemPtr& lhs, const CFileItemPtr& rhs) 
+{
+  return lhs->HasVideoInfoTag() && rhs->HasVideoInfoTag() && lhs->GetVideoInfoTag()->m_iDbId < rhs->GetVideoInfoTag()->m_iDbId;
 }
 
 bool CGUIWindowVideoNav::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
@@ -1214,7 +1229,7 @@ bool CGUIWindowVideoNav::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
       if (!local)
         items.Add(noneitem);
 
-      VECSOURCES sources=g_settings.m_videoSources;
+      VECSOURCES sources=*CMediaSourceSettings::Get().GetSources("video");
       g_mediaManager.GetLocalDrives(sources);
       CStdString result;
       CGUIDialogVideoInfo::AddItemPathToFileBrowserSources(sources, *item);
@@ -1319,6 +1334,54 @@ bool CGUIWindowVideoNav::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
       items.RemoveDiscCache(GetID());
       return true;
     }
+  case CONTEXT_BUTTON_SET_MOVIESET:
+    {
+      CFileItemPtr selectedSet;
+      if (!GetSetForMovie(item, selectedSet))
+        return true;
+
+      if (SetMovieSet(item, selectedSet))
+        Refresh();
+
+      return true;
+    }
+  case CONTEXT_BUTTON_MOVIESET_ADD_REMOVE_ITEMS:
+    {
+      CFileItemList originalItems;
+      CFileItemList selectedItems;
+
+      if (!GetMoviesForSet(item, originalItems, selectedItems) || selectedItems.Size() == 0) // need at least one item selected
+        return true;
+      VECFILEITEMS original = originalItems.GetList();
+      std::sort(original.begin(), original.end(), compFileItemsByDbId);
+      VECFILEITEMS selected = selectedItems.GetList();
+      std::sort(selected.begin(), selected.end(), compFileItemsByDbId);
+
+      bool refreshNeeded = false;
+      // update the "added" items
+      VECFILEITEMS addedItems;
+      set_difference(selected.begin(),selected.end(), original.begin(),original.end(), std::back_inserter(addedItems), compFileItemsByDbId);
+      for (VECFILEITEMS::iterator it = addedItems.begin();  it != addedItems.end(); ++it)
+      {
+        if (SetMovieSet(*it, item))
+          refreshNeeded = true;
+      }
+      // update the "deleted" items
+      CFileItemPtr clearItem(new CFileItem());
+      clearItem->GetVideoInfoTag()->m_iDbId = -1; // -1 will be used to clear set
+      VECFILEITEMS deletedItems;
+      set_difference(original.begin(),original.end(), selected.begin(),selected.end(), std::back_inserter(deletedItems), compFileItemsByDbId);
+      for (VECFILEITEMS::iterator it = deletedItems.begin();  it != deletedItems.end(); ++it)
+      {
+        if (SetMovieSet(*it, clearItem))
+          refreshNeeded = true;
+      }
+
+      // we need to clear any cached version of this tag's listing
+      if (refreshNeeded) 
+        Refresh();
+      return true;
+    }
   case CONTEXT_BUTTON_UPDATE_LIBRARY:
     {
       OnScan("");
@@ -1413,7 +1476,7 @@ void CGUIWindowVideoNav::OnChooseFanart(const CFileItem &videoItem)
   }
 
   CStdString result;
-  VECSOURCES sources(g_settings.m_videoSources);
+  VECSOURCES sources(*CMediaSourceSettings::Get().GetSources("video"));
   g_mediaManager.GetLocalDrives(sources);
   CGUIDialogVideoInfo::AddItemPathToFileBrowserSources(sources, item);
   bool flip=false;
@@ -1653,7 +1716,7 @@ bool CGUIWindowVideoNav::ApplyWatchedFilter(CFileItemList &items)
      (items.IsSmartPlayList() || (items.HasProperty("library.filter") && items.GetProperty("library.filter").asBoolean())))
     node = NODE_TYPE_TITLE_TVSHOWS; // so that the check below works
 
-  int watchMode = g_settings.GetWatchMode(m_vecItems->GetContent());
+  int watchMode = CMediaSettings::Get().GetWatchedMode(m_vecItems->GetContent());
 
   for (int i = 0; i < items.Size(); i++)
   {
@@ -1661,11 +1724,11 @@ bool CGUIWindowVideoNav::ApplyWatchedFilter(CFileItemList &items)
 
     if(item->HasVideoInfoTag() && (node == NODE_TYPE_TITLE_TVSHOWS || node == NODE_TYPE_SEASONS))
     {
-      if (watchMode == VIDEO_SHOW_UNWATCHED)
+      if (watchMode == WatchedModeUnwatched)
         item->GetVideoInfoTag()->m_iEpisode = (int)item->GetProperty("unwatchedepisodes").asInteger();
-      if (watchMode == VIDEO_SHOW_WATCHED)
+      if (watchMode == WatchedModeWatched)
         item->GetVideoInfoTag()->m_iEpisode = (int)item->GetProperty("watchedepisodes").asInteger();
-      if (watchMode == VIDEO_SHOW_ALL)
+      if (watchMode == WatchedModeAll)
         item->GetVideoInfoTag()->m_iEpisode = (int)item->GetProperty("totalepisodes").asInteger();
       item->SetProperty("numepisodes", item->GetVideoInfoTag()->m_iEpisode);
       listchanged = true;
@@ -1673,8 +1736,8 @@ bool CGUIWindowVideoNav::ApplyWatchedFilter(CFileItemList &items)
 
     if (filterWatched)
     {
-      if((watchMode==VIDEO_SHOW_WATCHED   && item->GetVideoInfoTag()->m_playCount== 0)
-      || (watchMode==VIDEO_SHOW_UNWATCHED && item->GetVideoInfoTag()->m_playCount > 0))
+      if((watchMode==WatchedModeWatched   && item->GetVideoInfoTag()->m_playCount== 0)
+      || (watchMode==WatchedModeUnwatched && item->GetVideoInfoTag()->m_playCount > 0))
       {
         items.Remove(i);
         i--;
@@ -1755,6 +1818,152 @@ bool CGUIWindowVideoNav::GetItemsForTag(const CStdString &strHeading, const std:
 
   items.Copy(dialog->GetSelectedItems());
   return items.Size() > 0;
+}
+
+bool CGUIWindowVideoNav::GetMoviesForSet(CFileItemPtr &setItem, CFileItemList &originalMovies, CFileItemList &selectedMovies)
+{
+  CVideoDatabase videodb;
+  if (!videodb.Open())
+    return false;
+
+  CStdString strHeading; strHeading.Format(g_localizeStrings.Get(20457));
+  CStdString baseDir;
+  baseDir.Format("videodb://1/7/%d", setItem->GetVideoInfoTag()->m_iDbId);
+
+  if (!CDirectory::GetDirectory(baseDir, originalMovies) || originalMovies.Size() <= 0) // keep a copy of the original members of the set
+    return false;
+
+  CFileItemList listItems;
+  if (!videodb.GetSortedVideos(MediaTypeMovie, "videodb://1", SortDescription(), listItems) || listItems.Size() <= 0)
+    return false;
+
+  CGUIDialogSelect *dialog = (CGUIDialogSelect *)g_windowManager.GetWindow(WINDOW_DIALOG_SELECT);
+  if (dialog == NULL)
+    return false;
+
+  listItems.Sort(SORT_METHOD_LABEL_IGNORE_THE, SortOrderAscending);
+
+  dialog->Reset();
+  dialog->SetMultiSelection(true);
+  dialog->SetHeading(strHeading);
+  dialog->SetItems(&listItems);
+  vector<int> selectedIndices;
+  for (int i = 0; i < originalMovies.Size(); i++)
+  {
+    for (int listIndex = 0; listIndex < listItems.Size(); listIndex++)
+    {
+      if (listItems.Get(listIndex)->GetVideoInfoTag()->m_iDbId == originalMovies[i]->GetVideoInfoTag()->m_iDbId)
+      {
+        selectedIndices.push_back(listIndex);
+        break;
+      }
+    }
+  }
+  dialog->SetSelected(selectedIndices);
+  dialog->EnableButton(true, 186);
+  dialog->DoModal();
+
+  if (dialog->IsConfirmed())
+  {
+    selectedMovies.Copy(dialog->GetSelectedItems());
+    return (selectedMovies.Size() > 0);
+  }
+  else
+    return false;
+}
+
+bool CGUIWindowVideoNav::GetSetForMovie(CFileItemPtr &movieItem, CFileItemPtr &selectedSet)
+{
+  CVideoDatabase videodb;
+  if (!videodb.Open())
+    return false;
+
+  CFileItemList listItems;
+  CStdString baseDir = "videodb://1/7/";
+  if (!CDirectory::GetDirectory(baseDir, listItems) || listItems.Size() <= 0)
+    return false;
+  listItems.Sort(SORT_METHOD_LABEL_IGNORE_THE, SortOrderAscending);
+
+  int currentSetId = 0;
+  CStdString currentSetLabel;
+
+  if (movieItem->GetVideoInfoTag()->m_iSetId > currentSetId)
+  {
+    currentSetId = movieItem->GetVideoInfoTag()->m_iSetId;
+    currentSetLabel = videodb.GetSetById(currentSetId);
+  }
+
+  if (currentSetId > 0)
+  {
+    // add clear item
+    CStdString strClear; strClear.Format(g_localizeStrings.Get(20467), currentSetLabel);
+    CFileItemPtr clearItem(new CFileItem(strClear));
+    clearItem->GetVideoInfoTag()->m_iDbId = -1; // -1 will be used to clear set
+    listItems.AddFront(clearItem, 0);
+    // add keep current set item
+    CStdString strKeep; strKeep.Format(g_localizeStrings.Get(20469), currentSetLabel);
+    CFileItemPtr keepItem(new CFileItem(strKeep));
+    keepItem->GetVideoInfoTag()->m_iDbId = currentSetId;
+    listItems.AddFront(keepItem, 1);
+  }
+
+  CGUIDialogSelect *dialog = (CGUIDialogSelect *)g_windowManager.GetWindow(WINDOW_DIALOG_SELECT);
+  if (dialog == NULL)
+    return false;
+
+  CStdString strHeading; 
+  strHeading.Format(g_localizeStrings.Get(20466));
+  dialog->Reset();
+  dialog->SetHeading(strHeading);
+  dialog->SetItems(&listItems);
+  if (currentSetId >= 0)
+  {
+    for (int listIndex = 0; listIndex < listItems.Size(); listIndex++) 
+    {
+      if (listItems.Get(listIndex)->GetVideoInfoTag()->m_iDbId == currentSetId)
+      {
+        dialog->SetSelected(listIndex);
+        break;
+      }
+    }
+  }
+  dialog->EnableButton(true, 20468); // new set via button
+  dialog->DoModal();
+
+  if (dialog->IsButtonPressed())
+  { // creating new set
+    CStdString newSetTitle;
+    if (!CGUIKeyboardFactory::ShowAndGetInput(newSetTitle, g_localizeStrings.Get(20468), false))
+      return false;
+    int idSet = videodb.AddSet(newSetTitle);
+    map<string, string> movieArt, setArt;
+    if (!videodb.GetArtForItem(idSet, "set", setArt))
+    {
+      videodb.GetArtForItem(movieItem->GetVideoInfoTag()->m_iDbId, "movie", movieArt);
+      videodb.SetArtForItem(idSet, "set", movieArt);
+    }
+    CFileItemPtr newSet(new CFileItem(newSetTitle));
+    newSet->GetVideoInfoTag()->m_iDbId = idSet;
+    selectedSet = newSet;
+    return true;
+  }
+  else if (dialog->IsConfirmed())
+  {
+    selectedSet = dialog->GetSelectedItem();
+    return (selectedSet != NULL);
+  }
+  else
+    return false;
+}
+
+bool CGUIWindowVideoNav::SetMovieSet (CFileItemPtr &movieItem, CFileItemPtr &selectedSet)
+{
+  CVideoDatabase videodb;
+  if (!videodb.Open())
+    return false;
+
+  videodb.SetMovieSet(movieItem->GetVideoInfoTag()->m_iDbId, selectedSet->GetVideoInfoTag()->m_iDbId);
+  return true;
 }
 
 CStdString CGUIWindowVideoNav::GetLocalizedType(const std::string &strType)

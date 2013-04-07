@@ -34,6 +34,7 @@
 #include "guilib/GUIRadioButtonControl.h"
 #include "guilib/GUISpinControlEx.h"
 #include "guilib/GUIImage.h"
+#include "guilib/Key.h"
 #include "filesystem/Directory.h"
 #include "video/VideoInfoScanner.h"
 #include "addons/Scraper.h"
@@ -42,6 +43,7 @@
 #include "guilib/GUIKeyboardFactory.h"
 #include "FileItem.h"
 #include "settings/Settings.h"
+#include "settings/MediaSourceSettings.h"
 #include "GUIInfoManager.h"
 #include "GUIUserMessages.h"
 #include "dialogs/GUIDialogSelect.h"
@@ -330,7 +332,7 @@ bool CGUIDialogAddonSettings::ShowVirtualKeyboard(int iControl)
           // setup the shares
           VECSOURCES *shares = NULL;
           if (source && strcmpi(source, "") != 0)
-            shares = g_settings.GetSourcesFromType(source);
+            shares = CMediaSourceSettings::Get().GetSources(source);
 
           VECSOURCES localShares;
           if (!shares)

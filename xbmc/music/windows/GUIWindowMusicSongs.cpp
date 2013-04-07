@@ -29,14 +29,17 @@
 #include "GUIUserMessages.h"
 #include "guilib/GUIWindowManager.h"
 #include "FileItem.h"
+#include "profiles/ProfilesManager.h"
 #include "storage/MediaManager.h"
-#include "settings/Settings.h"
 #include "settings/GUISettings.h"
+#include "settings/MediaSourceSettings.h"
+#include "guilib/Key.h"
 #include "guilib/LocalizeStrings.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
 #include "Autorun.h"
 #include "cdrip/CDDARipper.h"
+#include "cores/IPlayer.h"
 
 #define CONTROL_BTNVIEWASICONS     2
 #define CONTROL_BTNSORTBY          3
@@ -79,7 +82,7 @@ bool CGUIWindowMusicSongs::OnMessage(CGUIMessage& message)
 
       // is this the first time the window is opened?
       if (m_vecItems->GetPath() == "?" && message.GetStringParam().IsEmpty())
-        message.SetStringParam(g_settings.m_defaultMusicSource);
+        message.SetStringParam(CMediaSourceSettings::Get().GetDefaultSource("music"));
 
       return CGUIWindowMusicBase::OnMessage(message);
     }
@@ -198,7 +201,7 @@ bool CGUIWindowMusicSongs::GetDirectory(const CStdString &strDirectory, CFileIte
   items.FilterCueItems();
 
   CStdString label;
-  if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), g_settings.GetSourcesFromType("music"), &label)) 
+  if (items.GetLabel().IsEmpty() && m_rootDir.IsSource(items.GetPath(), CMediaSourceSettings::Get().GetSources("music"), &label)) 
     items.SetLabel(label);
 
   return true;
@@ -343,7 +346,7 @@ void CGUIWindowMusicSongs::GetContextButtons(int itemNumber, CContextButtons &bu
 
       // enable CDDB lookup if the current dir is CDDA
       if (g_mediaManager.IsDiscInDrive() && m_vecItems->IsCDDA() &&
-         (g_settings.GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
+         (CProfilesManager::Get().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
       {
         buttons.Add(CONTEXT_BUTTON_CDDB, 16002);
       }
@@ -366,7 +369,7 @@ void CGUIWindowMusicSongs::GetContextButtons(int itemNumber, CContextButtons &bu
              !item->GetPath().Equals("add") && !item->IsParentFolder() &&
              !item->IsPlugin()                                         &&
              !item->GetPath().Left(9).Equals("addons://")              &&
-            (g_settings.GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
+            (CProfilesManager::Get().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser))
     {
       buttons.Add(CONTEXT_BUTTON_SCAN, 13352);
     }

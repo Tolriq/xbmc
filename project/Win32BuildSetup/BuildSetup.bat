@@ -24,6 +24,7 @@ SET buildmode=ask
 SET promptlevel=prompt
 SET buildmingwlibs=true
 SET exitcode=0
+SET useshell=rxvt
 FOR %%b in (%1, %2, %3, %4, %5) DO (
 	IF %%b==vs2010 SET comp=vs2010
 	IF %%b==dx SET target=dx
@@ -32,6 +33,7 @@ FOR %%b in (%1, %2, %3, %4, %5) DO (
 	IF %%b==noclean SET buildmode=noclean
 	IF %%b==noprompt SET promptlevel=noprompt
 	IF %%b==nomingwlibs SET buildmingwlibs=false
+    IF %%b==sh SET useshell=sh
 )
 
 SET buildconfig=Release (DirectX)
@@ -55,6 +57,7 @@ IF %comp%==vs2010 (
   set OPTS_EXE="..\VS2010Express\XBMC for Windows.sln" /build "%buildconfig%"
   set CLEAN_EXE="..\VS2010Express\XBMC for Windows.sln" /clean "%buildconfig%"
   set EXE= "..\VS2010Express\XBMC\%buildconfig%\XBMC.exe"
+  set PDB= "..\VS2010Express\XBMC\%buildconfig%\XBMC.pdb"
 	
   rem	CONFIG END
   rem -------------------------------------------------------------
@@ -147,7 +150,12 @@ IF %comp%==vs2010 (
 	IF %buildmode%==clean (
 	  ECHO bla>makeclean
 	)
-    call buildmingwlibs.bat
+    rem only use sh to please jenkins
+    IF %useshell%==sh (
+      call buildmingwlibs.bat sh
+    ) ELSE (
+      call buildmingwlibs.bat
+    )
     IF EXIST errormingw (
     	set DIETEXT="failed to build mingw libs"
     	goto DIE
@@ -233,6 +241,7 @@ IF %comp%==vs2010 (
   call getdeploydependencies.bat
   CALL extract_git_rev.bat > NUL
   SET XBMC_SETUPFILE=XBMCSetup-%GIT_REV%-%target%.exe
+  SET XBMC_PDBFILE=XBMCSetup-%GIT_REV%-%target%.pdb
   ECHO Creating installer %XBMC_SETUPFILE%...
   IF EXIST %XBMC_SETUPFILE% del %XBMC_SETUPFILE% > NUL
   rem get path to makensis.exe from registry, first try tab delim
@@ -276,6 +285,7 @@ IF %comp%==vs2010 (
 	  set DIETEXT=Failed to create %XBMC_SETUPFILE%. NSIS installed?
 	  goto DIE
   )
+  copy %PDB% %XBMC_PDBFILE% > nul
   ECHO ------------------------------------------------------------
   ECHO Done!
   ECHO Setup is located at %CD%\%XBMC_SETUPFILE%

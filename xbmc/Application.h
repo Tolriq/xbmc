@@ -24,14 +24,15 @@
 #include "XBApplicationEx.h"
 
 #include "guilib/IMsgTargetCallback.h"
-#include "guilib/Key.h"
 #include "threads/Condition.h"
 #include "utils/GlobalsHandling.h"
 
 #include <map>
 
+class CAction;
 class CFileItem;
 class CFileItemList;
+class CKey;
 namespace ADDON
 {
   class CSkinInfo;
@@ -43,10 +44,12 @@ namespace MEDIA_DETECT
 {
   class CAutorun;
 }
+class CPlayerController;
 
-#include "cores/IPlayer.h"
+#include "cores/IPlayerCallback.h"
 #include "cores/playercorefactory/PlayerCoreFactory.h"
 #include "PlayListPlayer.h"
+#include "settings/ISettingsHandler.h"
 #if !defined(_WIN32) && defined(HAS_DVD_DRIVE)
 #include "storage/DetectDVDType.h"
 #endif
@@ -54,7 +57,6 @@ namespace MEDIA_DETECT
 #include "win32/WIN32Util.h"
 #endif
 #include "utils/Stopwatch.h"
-#include "utils/CharsetConverter.h"
 #ifdef HAS_PERFORMANCE_SAMPLE
 #include "utils/PerformanceStats.h"
 #endif
@@ -68,6 +70,7 @@ class DPMSSupport;
 class CSplash;
 class CBookmark;
 class CWebServer;
+class IPlayer;
 #ifdef HAS_WEB_SERVER
 class CWebServer;
 class CHTTPImageHandler;
@@ -104,7 +107,8 @@ protected:
   int       m_iPlayList;
 };
 
-class CApplication : public CXBApplicationEx, public IPlayerCallback, public IMsgTargetCallback
+class CApplication : public CXBApplicationEx, public IPlayerCallback, public IMsgTargetCallback,
+                     public ISettingsHandler
 {
 public:
 
@@ -365,7 +369,11 @@ public:
 
   CSplash* GetSplash() { return m_splash; }
   void SetRenderGUI(bool renderGUI);
+
+  bool SetLanguage(const CStdString &strLanguage);
 protected:
+  virtual bool OnSettingsSaving() const;
+
   bool LoadSkin(const CStdString& skinID);
   void LoadSkin(const boost::shared_ptr<ADDON::CSkinInfo>& skin);
 
@@ -461,6 +469,7 @@ protected:
   void CreateUserDirs();
 
   CSeekHandler *m_seekHandler;
+  CPlayerController *m_playerController;
   CInertialScrollingHandler *m_pInertialScrollingHandler;
   CNetwork    *m_network;
 #ifdef HAS_PERFORMANCE_SAMPLE

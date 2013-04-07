@@ -39,6 +39,7 @@ class CDVDInputStreamPVRManager
   : public CDVDInputStream
   , public CDVDInputStream::IChannel
   , public CDVDInputStream::IDisplayTime
+  , public CDVDInputStream::ISeekable
 {
 public:
   CDVDInputStreamPVRManager(IDVDPlayer* pPlayer);
@@ -88,7 +89,7 @@ public:
   void ResetScanTimeout(unsigned int iTimeoutMs);
 protected:
   bool CloseAndOpen(const char* strFile);
-  bool SupportsChannelSwitch(void) const;
+  static bool SupportsChannelSwitch(void);
 
   IDVDPlayer*               m_pPlayer;
   CDVDInputStream*          m_pOtherStream;

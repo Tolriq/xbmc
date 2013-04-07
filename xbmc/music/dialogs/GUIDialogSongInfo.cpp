@@ -28,12 +28,13 @@
 #include "music/windows/GUIWindowMusicBase.h"
 #include "music/tags/MusicInfoTag.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/Key.h"
 #include "filesystem/File.h"
 #include "filesystem/CurlFile.h"
 #include "FileItem.h"
-#include "settings/Settings.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/GUISettings.h"
+#include "settings/MediaSourceSettings.h"
 #include "guilib/LocalizeStrings.h"
 #include "TextureCache.h"
 #include "music/Album.h"
@@ -288,7 +289,7 @@ void CGUIDialogSongInfo::OnGetThumb()
   }
 
   CStdString result;
-  VECSOURCES sources(g_settings.m_musicSources);
+  VECSOURCES sources(*CMediaSourceSettings::Get().GetSources("music"));
   CGUIDialogMusicInfo::AddItemPathToFileBrowserSources(sources, *m_song);
   g_mediaManager.GetLocalDrives(sources);
   if (!CGUIDialogFileBrowser::ShowAndGetImage(items, sources, g_localizeStrings.Get(1030), result))

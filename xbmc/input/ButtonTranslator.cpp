@@ -21,9 +21,10 @@
 #include "system.h"
 #include "interfaces/Builtins.h"
 #include "ButtonTranslator.h"
+#include "profiles/ProfilesManager.h"
 #include "utils/URIUtils.h"
-#include "settings/Settings.h"
 #include "guilib/Key.h"
+#include "guilib/WindowIDs.h"
 #include "input/XBMC_keysym.h"
 #include "input/XBMC_keytable.h"
 #include "filesystem/File.h"
@@ -217,6 +218,8 @@ static const ActionMapping actions[] =
         {"decreasepar"       , ACTION_DECREASE_PAR},
         {"volampup"          , ACTION_VOLAMP_UP},
         {"volampdown"        , ACTION_VOLAMP_DOWN},
+        {"createbookmark"        , ACTION_CREATE_BOOKMARK},
+        {"createepisodebookmark" , ACTION_CREATE_EPISODE_BOOKMARK},
 
         // PVR actions
         {"channelup"             , ACTION_CHANNEL_UP},
@@ -567,7 +570,7 @@ bool CButtonTranslator::Load(bool AlwaysLoad)
   else
     CLog::Log(LOGDEBUG, "CButtonTranslator::Load - no system %s found, skipping", REMOTEMAP);
 
-  lircmapPath = g_settings.GetUserDataItem(REMOTEMAP);
+  lircmapPath = CProfilesManager::Get().GetUserDataItem(REMOTEMAP);
   if(CFile::Exists(lircmapPath))
     success |= LoadLircMap(lircmapPath);
   else
@@ -869,7 +872,7 @@ bool CButtonTranslator::TranslateJoystickString(int window, const char* szDevice
   return (action > 0);
 }
 
-bool CButtonTranslator::TranslateTouchAction(int window, int touchAction, int touchPointers, int &action)
+bool CButtonTranslator::TranslateTouchAction(int touchAction, int touchPointers, int &window, int &action)
 {
   action = 0;
   if (touchPointers <= 0)
@@ -880,7 +883,10 @@ bool CButtonTranslator::TranslateTouchAction(int window, int touchAction, int to
 
   action = GetTouchActionCode(window, touchAction);
   if (action <= 0)
+  {
+    window = WINDOW_INVALID;
     action = GetTouchActionCode(-1, touchAction);
+  }
 
   return action > 0;
 }
@@ -1360,7 +1366,7 @@ uint32_t CButtonTranslator::TranslateKeyboardButton(TiXmlElement *pButton)
       const char *str = strID.c_str();
       char *endptr;
       long int id = strtol(str, &endptr, 0);
-      if (endptr - str != strlen(str) || id <= 0 || id > 0x00FFFFFF)
+      if (endptr - str != (int)strlen(str) || id <= 0 || id > 0x00FFFFFF)
         CLog::Log(LOGDEBUG, "%s - invalid key id %s", __FUNCTION__, strID.c_str());
       else
         button_id = (uint32_t) id;

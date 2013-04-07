@@ -19,10 +19,10 @@
  */
 
 #include "GUIDialogPVRGuideOSD.h"
-#include "Application.h"
 #include "FileItem.h"
 #include "GUIDialogPVRGuideInfo.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/Key.h"
 #include "view/ViewState.h"
 #include "epg/Epg.h"
 

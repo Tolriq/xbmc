@@ -23,11 +23,13 @@
 #include "GUIInfoManager.h"
 #include "Application.h"
 #include "music/tags/MusicInfoTag.h"
+#include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "settings/AdvancedSettings.h"
 #include "windowing/WindowingFactory.h"
 #include "utils/URIUtils.h"
 #include "utils/StringUtils.h"
+#include "cores/IPlayer.h"
 #include "cores/AudioEngine/AEFactory.h"
 #include "cores/AudioEngine/Utils/AEConvert.h"
 #ifdef _LINUX
@@ -75,7 +77,7 @@ bool CVisualisation::Create(int x, int y, int w, int h, void *device)
   m_pInfo->y = y;
   m_pInfo->width = w;
   m_pInfo->height = h;
-  m_pInfo->pixelRatio = g_settings.m_ResInfo[g_graphicsContext.GetVideoResolution()].fPixelRatio;
+  m_pInfo->pixelRatio = CDisplaySettings::Get().GetResolutionInfo(g_graphicsContext.GetVideoResolution()).fPixelRatio;
 
   m_pInfo->name = strdup(Name().c_str());
   m_pInfo->presets = strdup(CSpecialProtocol::TranslatePath(Path()).c_str());

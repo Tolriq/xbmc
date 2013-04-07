@@ -39,6 +39,7 @@
 #include "utils/log.h"
 #include "cores/AudioEngine/AEFactory.h"
 #if defined(_WIN32)
+  #include "utils/CharsetConverter.h"
   #include "Windows.h"
   #ifdef HAS_IRSERVERSUITE
     #include "input/windows/IRServerSuite.h"
@@ -85,6 +86,10 @@ CExternalPlayer::CExternalPlayer(IPlayerCallback& callback)
   m_playOneStackItem = false;
 
   m_dialog = NULL;
+  m_hwndXbmc = NULL;
+  m_xPos = 0;
+  m_yPos = 0;
+
 
 #if defined(_WIN32)
   memset(&m_processInfo, 0, sizeof(m_processInfo));
