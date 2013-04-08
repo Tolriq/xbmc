@@ -106,10 +106,13 @@ JSONRPC_STATUS CPlaylistOperations::Add(const CStdString &method, ITransportLaye
   {
     case PLAYLIST_VIDEO:
     case PLAYLIST_MUSIC:
-      if (playlist == PLAYLIST_VIDEO)
-        params["item"]["media"] = "video";
-      else if (playlist == PLAYLIST_MUSIC)
-        params["item"]["media"] = "music";
+      if (!parameterObject["item"].isMember("media"))
+      {
+        if (playlist == PLAYLIST_VIDEO)
+          params["item"]["media"] = "video";
+        else if (playlist == PLAYLIST_MUSIC)
+          params["item"]["media"] = "music";
+      }
 
       if (!FillFileItemList(params["item"], list))
         return InvalidParams;
@@ -122,8 +125,8 @@ JSONRPC_STATUS CPlaylistOperations::Add(const CStdString &method, ITransportLaye
       slideshow = (CGUIWindowSlideShow*)g_windowManager.GetWindow(WINDOW_SLIDESHOW);
       if (!slideshow)
         return FailedToExecute;
-      
-      params["item"]["media"] = "pictures";
+      if (!parameterObject["item"].isMember("media"))
+        params["item"]["media"] = "pictures";
       if (!FillFileItemList(params["item"], list))
         return InvalidParams;
 
@@ -151,9 +154,9 @@ JSONRPC_STATUS CPlaylistOperations::Insert(const CStdString &method, ITransportL
 
   CFileItemList list;
   CVariant params = parameterObject;
-  if (playlist == PLAYLIST_VIDEO)
+  if (playlist == PLAYLIST_VIDEO && !parameterObject["item"].isMember("media"))
     params["item"]["media"] = "video";
-  else if (playlist == PLAYLIST_MUSIC)
+  else if (playlist == PLAYLIST_MUSIC && !parameterObject["item"].isMember("media"))
     params["item"]["media"] = "music";
   else
     return FailedToExecute;
