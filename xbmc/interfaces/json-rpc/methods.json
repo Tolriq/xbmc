@@ -1894,4 +1894,22 @@
       "additionalProperties": { "type": "string" }
     }
   }
+  "Favourites.GetFavourites": {
+    "type": "method",
+    "description": "Retrieve all favourites",
+    "transport": "Response",
+    "permission": "ReadData",
+    "params": [
+      { "name": "type", "type": [ "null", { "$ref": "Favourite.Type" } ], "default": null },
+      { "name": "properties", "$ref": "Favourite.Fields.Favourite" }
+    ],
+    "returns": {
+      "type": "object",
+      "properties": {
+        "limits": { "$ref": "List.LimitsReturned", "required": true },
+        "favourites": { "type": "array",
+          "items": { "$ref": "Favourite.Details.Favourite" }
+      }
+    }
+  }
 }

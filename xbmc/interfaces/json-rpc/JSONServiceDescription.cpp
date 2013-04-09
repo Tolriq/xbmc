@@ -36,6 +36,7 @@
 #include "XBMCOperations.h"
 #include "ApplicationOperations.h"
 #include "PVROperations.h"
+#include "FavouritesOperations.h"
 
 using namespace std;
 using namespace JSONRPC;
@@ -190,6 +191,9 @@ JsonRpcMethodMap CJSONServiceDescription::m_methodMaps[] = {
   { "Application.SetVolume",                        CApplicationOperations::SetVolume },
   { "Application.SetMute",                          CApplicationOperations::SetMute },
   { "Application.Quit",                             CApplicationOperations::Quit },
+
+// Favourites operations
+  { "Favourites.GetFavourites",                     CFavouritesOperations::GetFavourites },
 
 // XBMC operations
   { "XBMC.GetInfoLabels",                           CXBMCOperations::GetInfoLabels },

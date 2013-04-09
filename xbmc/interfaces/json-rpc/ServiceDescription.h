@@ -22,7 +22,7 @@
 namespace JSONRPC
 {
   const char* const JSONRPC_SERVICE_ID          = "http://www.xbmc.org/jsonrpc/ServiceDescription.json";
-  const char* const JSONRPC_SERVICE_VERSION     = "6.4.0";
+  const char* const JSONRPC_SERVICE_VERSION     = "6.5.0";
   const char* const JSONRPC_SERVICE_DESCRIPTION = "JSON-RPC API of XBMC";
 
   const char* const JSONRPC_SERVICE_TYPES[] = {  
@@ -1241,6 +1241,30 @@ namespace JSONRPC
             "\"tag\": { \"type\": \"string\", \"enum\": [ \"prealpha\", \"alpha\", \"beta\", \"releasecandidate\", \"stable\" ], \"required\": true }"
           "}"
         "}"
+      "}"
+    "}",
+    "\"Favourite.Fields.Favourite\": {"
+      "\"extends\": \"Item.Fields.Base\","
+      "\"items\": { \"type\": \"string\","
+        "\"enum\": [ \"window\", \"windowparameter\", \"thumbnail\", \"path\" ]"
+      "}"
+    "}",
+    "\"Favourite.Type\": {"
+      "\"type\": \"string\","
+        "\"enum\": [ \"media\", \"window\", \"script\", \"unknown\" ]"
+    "}",
+    "\"Favourite.Details.Favourite\": {"
+      "\"type\": \"array\","
+      "\"items\": { \"type\": \"object\","
+        "\"properties\": {"
+          "\"title\": { \"type\": \"string\", \"required\": true },"
+          "\"type\": { \"$ref\": \"Favourite.Type\", \"required\": true },"
+          "\"path\": { \"type\": \"string\" },"
+          "\"window\": { \"type\": \"string\" },"
+          "\"windowparameter\": { \"type\": \"string\" },"
+          "\"thumbnail\": { \"type\": \"string\" }"
+        "},"
+        "\"additionalProperties\": false"
       "}"
     "}"
   };
@@ -3140,7 +3164,26 @@ namespace JSONRPC
         "\"description\": \"Object containing key-value pairs of the retrieved info booleans\","
         "\"additionalProperties\": { \"type\": \"string\" }"
       "}"
+    "}",
+    "\"Favourites.GetFavourites\": {"
+      "\"type\": \"method\","
+      "\"description\": \"Retrieve all favourites\","
+      "\"transport\": \"Response\","
+      "\"permission\": \"ReadData\","
+      "\"params\": ["
+        "{ \"name\": \"type\", \"type\": [ \"null\", { \"$ref\": \"Favourite.Type\" } ], \"default\": null },"
+        "{ \"name\": \"properties\", \"$ref\": \"Favourite.Fields.Favourite\" }"
+      "],"
+      "\"returns\": {"
+        "\"type\": \"object\","
+        "\"properties\": {"
+          "\"limits\": { \"$ref\": \"List.LimitsReturned\", \"required\": true },"
+          "\"favourites\": { \"type\": \"array\","
+            "\"items\": { \"$ref\": \"Favourite.Details.Favourite\" }"
+        "}"
+      "}"
     "}"
+  "}"
   };
 
   const char* const JSONRPC_SERVICE_NOTIFICATIONS[] = {  
