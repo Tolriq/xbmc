@@ -11333,7 +11333,12 @@ msgctxt "#33083"
 msgid "Enable custom script button"
 msgstr ""
 
-#empty strings from id 33084 to 33099
+#: addons/skin.confluence/720p/SettingsProfile.xml
+msgctxt "#33084"
+msgid "Auto login"
+msgstr ""
+
+#empty strings from id 33085 to 33099
 
 #: xbmc/network/network.cpp
 msgctxt "#33100"
@@ -11698,7 +11703,9 @@ msgctxt "#36009"
 msgid "Put devices in standby mode when activating screensaver"
 msgstr ""
 
-#empty string with id 36010
+msgctxt "#36010"
+msgid "Wake devices when deactivating screensaver"
+msgstr ""
 
 #: xbmc/peripherals/devices/peripheralcecadapter.cpp
 msgctxt "#36011"
@@ -11886,4 +11893,9 @@ msgstr ""
 #: xbmc/cores/dvdplayer/DVDInputStreams/DVDInputStreamNavigator.cpp
 msgctxt "#37013"
 msgid "(Directors Comments)"
+msgstr ""
+
+#: xbmc/GUIInfoManager.cpp
+msgctxt "#37014"
+msgid "Last used profile"
 msgstr ""
