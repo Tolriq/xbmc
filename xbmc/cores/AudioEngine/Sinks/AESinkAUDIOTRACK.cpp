@@ -67,6 +67,12 @@ static bool Has71Support()
   return CJNIAudioManager::GetSDKVersion() >= 21;
 }
 
+// AMLogic helper for HD Audio
+bool CAESinkAUDIOTRACK::HasAmlHD()
+{
+  return ((CJNIAudioFormat::ENCODING_DOLBY_TRUEHD != -1) && (CJNIAudioFormat::ENCODING_DTS_HD != -1));
+}
+
 static int AEStreamFormatToATFormat(const CAEStreamInfo::DataType& dt)
 {
   switch (dt)
@@ -210,7 +216,7 @@ CAESinkAUDIOTRACK::CAESinkAUDIOTRACK()
   m_passthrough = false;
   m_min_buffer_size = 0;
   m_lastPlaybackHeadPosition = 0;
-  m_pause_time = 0;
+  m_extTimer.SetExpired();
 }
 
 CAESinkAUDIOTRACK::~CAESinkAUDIOTRACK()
@@ -231,7 +237,7 @@ bool CAESinkAUDIOTRACK::Initialize(AEAudioFormat &format, std::string &device)
   m_offset = -1;
   m_lastPlaybackHeadPosition = 0;
   m_linearmovingaverage.clear();
-  m_pause_time = 0;
+  m_extTimer.SetExpired();
   CLog::Log(LOGDEBUG, "CAESinkAUDIOTRACK::Initialize requested: sampleRate %u; format: %s; channels: %d", format.m_sampleRate, CAEUtil::DataFormatToStr(format.m_dataFormat), format.m_channelLayout.Count());
 
   int stream = CJNIAudioManager::STREAM_MUSIC;
@@ -247,24 +253,36 @@ bool CAESinkAUDIOTRACK::Initialize(AEAudioFormat &format, std::string &device)
   if (m_format.m_dataFormat == AE_FMT_RAW && !CXBMCApp::IsHeadsetPlugged())
   {
     m_passthrough = true;
+    m_encoding = AEStreamFormatToATFormat(m_format.m_streamInfo.m_type);
+    m_format.m_channelLayout = AE_CH_LAYOUT_2_0;
 
-    if (!m_info.m_wantsIECPassthrough)
+    if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_DTSHD ||
+        m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_TRUEHD)
     {
-      m_encoding = AEStreamFormatToATFormat(m_format.m_streamInfo.m_type);
-      m_format.m_channelLayout = AE_CH_LAYOUT_2_0;
-      if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_DTSHD ||
-          m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_TRUEHD)
-      {
-        m_format.m_channelLayout = AE_CH_LAYOUT_7_1;
-        // Shield v5 workaround
-        if (CJNIAudioManager::GetSDKVersion() == 22 && m_sink_sampleRate > 48000)
-          m_sink_sampleRate = 48000;
-      }
+      m_format.m_channelLayout = AE_CH_LAYOUT_7_1;
+      // Shield v5 workaround
+      if (!m_info.m_wantsIECPassthrough && CJNIAudioManager::GetSDKVersion() == 22 && m_sink_sampleRate > 48000)
+        m_sink_sampleRate = 48000;
     }
-    else
+    if (m_info.m_wantsIECPassthrough)
     {
       m_format.m_dataFormat     = AE_FMT_S16LE;
-      m_format.m_sampleRate     = m_sink_sampleRate;
+      if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_DTSHD ||
+          m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_TRUEHD)
+        m_sink_sampleRate = 192000;
+
+      if (m_format.m_streamInfo.m_type == CAEStreamInfo::STREAM_TYPE_EAC3)
+        m_sink_sampleRate = m_format.m_streamInfo.m_sampleRate;
+
+      // we are running on an old android version
+      // that does neither know AC3, DTS or whatever
+      // we will fallback to 16BIT passthrough
+      if (m_encoding == -1)
+      {
+        m_format.m_channelLayout = AE_CH_LAYOUT_2_0;
+        m_format.m_sampleRate     = m_sink_sampleRate;
+        m_encoding = CJNIAudioFormat::ENCODING_PCM_16BIT;
+      }
     }
   }
   else
@@ -361,15 +379,28 @@ bool CAESinkAUDIOTRACK::Initialize(AEAudioFormat &format, std::string &device)
 
       CLog::Log(LOGDEBUG, "Opening Passthrough RAW Format: %s Sink SampleRate: %u", CAEUtil::StreamTypeToStr(m_format.m_streamInfo.m_type), m_sink_sampleRate);
       m_format.m_frameSize = 1;
+      m_sink_frameSize = m_format.m_frameSize;
     }
     else
     {
-      m_min_buffer_size           *= 2;
-      m_format.m_frameSize    = m_format.m_channelLayout.Count() *
-        (CAEUtil::DataFormatToBits(m_format.m_dataFormat) / 8);
-      m_format.m_frames         = (int)(m_min_buffer_size / m_format.m_frameSize) / 2;
+      if (m_passthrough)
+      {
+        m_min_buffer_size *= 2;
+        if (m_sink_sampleRate > 48000)
+          m_min_buffer_size *= (m_sink_sampleRate / 48000); // same amount of buffer in seconds as for 48 khz
+        else if (m_sink_sampleRate < m_format.m_sampleRate) // eac3
+          m_min_buffer_size *= (m_format.m_sampleRate / m_sink_sampleRate);
+      }
+      else
+        m_min_buffer_size *= 2;
+
+      m_format.m_frameSize = m_format.m_channelLayout.Count() * (CAEUtil::DataFormatToBits(m_format.m_dataFormat) / 8);
+      if (m_passthrough)
+        m_sink_frameSize = 2 * CAEUtil::DataFormatToBits(AE_FMT_S16LE) / 8; // sending via 2 channels 2 * 16 / 8 = 4
+      else
+        m_sink_frameSize = m_format.m_frameSize;
+      m_format.m_frames = (int)(m_min_buffer_size / m_format.m_frameSize) / 2;
     }
-    m_sink_frameSize          = m_format.m_frameSize;
 
     if (m_passthrough && !m_info.m_wantsIECPassthrough)
       m_audiotrackbuffer_sec = rawlength_in_seconds;
@@ -444,9 +475,9 @@ void CAESinkAUDIOTRACK::Deinitialize()
 
   m_duration_written = 0;
   m_offset = -1;
-  m_pause_time = 0;
 
   m_lastPlaybackHeadPosition = 0;
+  m_extTimer.SetExpired();
   m_linearmovingaverage.clear();
 
   delete m_at_jni;
@@ -475,7 +506,6 @@ void CAESinkAUDIOTRACK::GetDelay(AEDelayStatus& status)
   // head_pos does not necessarily start at the beginning
   if (m_offset == -1 && m_at_jni->getPlayState() == CJNIAudioTrack::PLAYSTATE_PLAYING)
   {
-    CLog::Log(LOGDEBUG, "Offset updated to %u", head_pos);
     m_offset = head_pos;
   }
 
@@ -486,12 +516,19 @@ void CAESinkAUDIOTRACK::GetDelay(AEDelayStatus& status)
   }
   uint32_t normHead_pos = head_pos - m_offset;
 
+#if defined(HAS_LIBAMCODEC)
+  if (aml_present() &&
+      (m_encoding == CJNIAudioFormat::ENCODING_DTS_HD ||
+       m_encoding == CJNIAudioFormat::ENCODING_E_AC3 ||
+       m_encoding == CJNIAudioFormat::ENCODING_DOLBY_TRUEHD))
+    normHead_pos /= m_sink_frameSize;  // AML wants sink in 48k but returns pos in 192k
+#endif
+
   if (m_passthrough && !m_info.m_wantsIECPassthrough)
   {
-    if (m_pause_time > 0)
+    if (m_extTimer.MillisLeft() > 0)
     {
       const double d = GetMovingAverageDelay(GetCacheTotal());
-      CLog::Log(LOGDEBUG, "Faking Delay: smooth %lf measured: %lf", d * 1000, GetCacheTotal() * 1000);
       status.SetDelay(d);
       return;
     }
@@ -499,7 +536,6 @@ void CAESinkAUDIOTRACK::GetDelay(AEDelayStatus& status)
   if (normHead_pos > m_lastPlaybackHeadPosition)
   {
     unsigned int differencehead = normHead_pos - m_lastPlaybackHeadPosition;
-    CLog::Log(LOGDEBUG, "Sink advanced: %u", differencehead);
     m_lastPlaybackHeadPosition = normHead_pos;
   }
 
@@ -514,13 +550,6 @@ void CAESinkAUDIOTRACK::GetDelay(AEDelayStatus& status)
     delay = 0;
 
   const double d = GetMovingAverageDelay(delay);
-
-  CLog::Log(LOGDEBUG, "Calculations duration written: %lf sampleRate: %u gone: %lf", m_duration_written, m_sink_sampleRate, gone);
-
-  bool playing = m_at_jni->getPlayState() == CJNIAudioTrack::PLAYSTATE_PLAYING;
-
-  CLog::Log(LOGDEBUG, "Current-Delay: smoothed: %lf measured: %lf Head Pos: %u Playing: %s", d * 1000, delay * 1000,
-                       normHead_pos, playing ? "yes" : "no");
 
   status.SetDelay(d);
 }
@@ -545,7 +574,6 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
 
   // for debugging only - can be removed if everything is really stable
   uint64_t startTime = CurrentHostCounter();
-  CLog::Log(LOGDEBUG, "Got frames: %u", frames);
 
   uint8_t *buffer = data[0]+offset*m_format.m_frameSize;
   uint8_t *out_buf = buffer;
@@ -556,11 +584,10 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
   int loop_written = 0;
   if (frames)
   {
-    if (m_pause_time > 0)
+    if (m_extTimer.MillisLeft() > 0)
     {
-      usleep(m_format.m_streamInfo.GetDuration() * 1000);
-      CLog::Log(LOGDEBUG, "Sleeptime: %lf left", m_pause_time);
-      m_pause_time -= m_format.m_streamInfo.GetDuration() / 1000.0;
+      double sleeptime = std::min((double) m_extTimer.MillisLeft(), m_format.m_streamInfo.GetDuration());
+      usleep(sleeptime * 1000);
     }
     if (m_at_jni->getPlayState() != CJNIAudioTrack::PLAYSTATE_PLAYING)
       m_at_jni->play();
@@ -579,12 +606,11 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
         return INT_MAX;
       }
 
-      CLog::Log(LOGDEBUG, "Size left: %d", size_left);
       // if we could not add any data - sleep a bit and retry
       if (loop_written == 0)
       {
-	if (!retried)
-	{
+        if (!retried)
+        {
           retried = true;
           double sleep_time = 0;
           if (m_passthrough && !m_info.m_wantsIECPassthrough)
@@ -600,12 +626,12 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
           bool playing = m_at_jni->getPlayState() == CJNIAudioTrack::PLAYSTATE_PLAYING;
           CLog::Log(LOGDEBUG, "Retried to write onto the sink - slept: %lf playing: %s", sleep_time, playing ? "yes" : "no");
           continue;
-	}
-	else
-	{
-	  CLog::Log(LOGDEBUG, "Repeatedly tried to write onto the sink - giving up");
-	  break;
-	}
+        }
+        else
+        {
+          CLog::Log(LOGDEBUG, "Repeatedly tried to write onto the sink - giving up");
+          break;
+        }
       }
       retried = false; // at least one time there was more than zero data written
       if (m_passthrough && !m_info.m_wantsIECPassthrough)
@@ -621,11 +647,11 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
         }
       }
       else
-        m_duration_written += ((double) loop_written / m_sink_frameSize) / m_format.m_sampleRate;
+        m_duration_written += ((double) loop_written / m_format.m_frameSize) / m_format.m_sampleRate;
 
       // just try again to care for fragmentation
       if (written < size)
-	out_buf = out_buf + loop_written;
+        out_buf = out_buf + loop_written;
 
       loop_written = 0;
     }
@@ -644,12 +670,18 @@ unsigned int CAESinkAUDIOTRACK::AddPackets(uint8_t **data, unsigned int frames, 
       usleep(extra_sleep * 1000);
       time_to_add_ms += extra_sleep;
     }
-
-    if (m_pause_time < 0)
-      m_pause_time = 0;
+  }
+  else
+  {
+    double time_should_ms = written_frames / (double) m_format.m_sampleRate * 1000.0;
+    double time_off = time_should_ms - time_to_add_ms;
+    if (time_off > 0 && time_off > time_should_ms / 2.0)
+    {
+      usleep(time_should_ms / 4.0 * 1000);
+      time_to_add_ms += time_should_ms / 4.0;
+    }
   }
 
-  CLog::Log(LOGDEBUG, "Time needed for add Packet: %lf ms", time_to_add_ms);
   return written_frames;
 }
 
@@ -658,13 +690,15 @@ void CAESinkAUDIOTRACK::AddPause(unsigned int millis)
   if (!m_at_jni)
     return;
 
-  CLog::Log(LOGDEBUG, "AddPause was called with millis: %u and PlayState: %d", millis, m_at_jni->getPlayState());
-
-  // we can cache a maximum amount of m_audiotrackbuffer_sec seconds of silence
-  if (m_pause_time + millis / 1000.0 <= m_audiotrackbuffer_sec)
-    m_pause_time += millis / 1000.0;
-
+  // on startup the buffer is empty, it "should" take the silence if we would really send some
+  // without any delay. In between we need to sleep out the frames though
+  if (m_extTimer.MillisLeft() + millis <= m_audiotrackbuffer_sec * 1000 && m_offset == -1)
+    m_extTimer.Set(m_extTimer.MillisLeft() + millis);
+  else
+  {
     usleep(millis * 1000);
+    m_extTimer.Set(m_extTimer.MillisLeft() + millis);
+  }
 }
 
 void CAESinkAUDIOTRACK::Drain()
@@ -676,7 +710,7 @@ void CAESinkAUDIOTRACK::Drain()
   m_at_jni->stop();
   m_duration_written = 0;
   m_offset = -1;
-  m_pause_time = 0;
+  m_extTimer.SetExpired();
   m_lastPlaybackHeadPosition = 0;
   m_linearmovingaverage.clear();
 }
@@ -720,7 +754,16 @@ void CAESinkAUDIOTRACK::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
     {
       // passthrough
       m_info.m_wantsIECPassthrough = true;
+      m_sink_sampleRates.insert(44100);
       m_sink_sampleRates.insert(48000);
+      if (HasAmlHD())
+      {
+        m_sink_sampleRates.insert(96000);
+        m_sink_sampleRates.insert(192000);
+        m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_EAC3);
+        m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
+        m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_TRUEHD);
+      }
     }
     else
 #endif
@@ -738,21 +781,19 @@ void CAESinkAUDIOTRACK::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
           CLog::Log(LOGDEBUG, "AESinkAUDIOTRACK - %d supported", test_sample[i]);
         }
       }
-      if (CJNIAudioManager::GetSDKVersion() >= 21)
+      if (CJNIAudioManager::GetSDKVersion() >= 23)
       {
         m_info.m_wantsIECPassthrough = false;
         // here only 5.1 would work but we cannot correctly distinguish
         // m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_EAC3);
-
-        if (CJNIAudioManager::GetSDKVersion() >= 23)
-        {
+        m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
+      }
+      if (StringUtils::StartsWithNoCase(CJNIBuild::DEVICE, "foster")) // SATV is ahead of API
+      {
+        m_info.m_wantsIECPassthrough = false;
+        if (CJNIAudioManager::GetSDKVersion() == 22)
           m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
-        }
-        if (StringUtils::StartsWithNoCase(CJNIBuild::DEVICE, "foster")) // SATV is ahead of API
-        {
-          m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
-          m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_TRUEHD);
-        }
+        m_info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_TRUEHD);
       }
     }
     std::copy(m_sink_sampleRates.begin(), m_sink_sampleRates.end(), std::back_inserter(m_info.m_sampleRates));

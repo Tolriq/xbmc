@@ -6748,7 +6748,6 @@ bool CVideoDatabase::GetInProgressTvShowsNav(const std::string& strBaseDir, CFil
 {
   Filter filter;
   filter.order = PrepareSQL("c%02d", VIDEODB_ID_TV_TITLE);
-  filter.limit = PrepareSQL("%u", limit ? limit : g_advancedSettings.m_iVideoLibraryRecentlyAddedItems);
   filter.where = "watchedCount != 0 AND totalCount != watchedCount";
   return GetTvShowsByWhere(strBaseDir, filter, items, SortDescription(), getDetails);
 }
@@ -6945,10 +6944,9 @@ ScraperPtr CVideoDatabase::GetScraperForPath(const std::string& strPath, SScanSe
       std::string scraperID = m_pDS->fv("path.strScraper").get_asString();
 
       AddonPtr addon;
-      if (!scraperID.empty() &&
-        CAddonMgr::GetInstance().GetAddon(scraperID, addon))
+      if (!scraperID.empty() && CAddonMgr::GetInstance().GetAddon(scraperID, addon))
       {
-        scraper = std::dynamic_pointer_cast<CScraper>(addon->Clone());
+        scraper = std::dynamic_pointer_cast<CScraper>(addon);
         if (!scraper)
           return ScraperPtr();
 
@@ -6991,7 +6989,7 @@ ScraperPtr CVideoDatabase::GetScraperForPath(const std::string& strPath, SScanSe
           if (content != CONTENT_NONE &&
               CAddonMgr::GetInstance().GetAddon(m_pDS->fv("path.strScraper").get_asString(), addon))
           {
-            scraper = std::dynamic_pointer_cast<CScraper>(addon->Clone());
+            scraper = std::dynamic_pointer_cast<CScraper>(addon);
             scraper->SetPathSettings(content, m_pDS->fv("path.strSettings").get_asString());
             settings.parent_name = m_pDS->fv("path.useFolderNames").get_asBool();
             settings.recurse = m_pDS->fv("path.scanRecursive").get_asInt();

@@ -1189,7 +1189,7 @@ int CDVDInputStreamNavigator::GetTime()
   return m_iTime;
 }
 
-bool CDVDInputStreamNavigator::SeekTime(int iTimeInMsec)
+bool CDVDInputStreamNavigator::PosTime(int iTimeInMsec)
 {
   if( m_dll.dvdnav_jump_to_sector_by_time(m_dvdnav, iTimeInMsec * 90, 0) == DVDNAV_STATUS_ERR )
   {
@@ -1535,6 +1535,12 @@ void CDVDInputStreamNavigator::GetVideoResolution(uint32_t* width, uint32_t* hei
   if (!m_dvdnav) return;
 
   dvdnav_status_t status = m_dll.dvdnav_get_video_resolution(m_dvdnav, width, height);
+  if (status != DVDNAV_STATUS_OK)
+  {
+    CLog::Log(LOGWARNING, "CDVDInputStreamNavigator::GetVideoResolution - Failed to get resolution (%s)", m_dll.dvdnav_err_to_string(m_dvdnav));
+    *width = 0;
+    *height = 0;
+  }
 }
 
 DVDNavVideoStreamInfo CDVDInputStreamNavigator::GetVideoStreamInfo()

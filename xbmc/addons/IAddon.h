@@ -26,6 +26,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include "XBDateTime.h"
 
 class TiXmlElement;
 
@@ -88,12 +89,10 @@ namespace ADDON
   {
   public:
     virtual ~IAddon() {};
-    virtual AddonPtr Clone() const =0;
     virtual TYPE Type() const =0;
     virtual TYPE FullType() const =0;
     virtual bool IsType(TYPE type) const =0;
-    virtual AddonProps Props() const =0;
-    virtual AddonProps& Props() =0;
+    virtual const AddonProps& Props() =0;
     virtual const std::string ID() const =0;
     virtual const std::string Name() const =0;
     virtual bool IsInUse() const =0;
@@ -108,8 +107,11 @@ namespace ADDON
     virtual const std::string FanArt() const =0;
     virtual const std::string Author() const =0;
     virtual const std::string Icon() const =0;
-    virtual int  Stars() const =0;
     virtual const std::string Disclaimer() const =0;
+    virtual const std::string Broken() const =0;
+    virtual CDateTime InstallDate() const =0;
+    virtual CDateTime LastUpdated() const =0;
+    virtual CDateTime LastUsed() const =0;
     virtual const InfoMap &ExtraInfo() const =0;
     virtual bool HasSettings() =0;
     virtual void SaveSettings() =0;

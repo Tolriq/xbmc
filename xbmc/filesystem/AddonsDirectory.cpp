@@ -325,8 +325,8 @@ static bool Browse(const CURL& path, CFileItemList &items)
   if (repo == "all")
   {
     CAddonDatabase database;
-    database.Open();
-    database.GetAddons(addons);
+    if (!database.Open() || !database.GetRepositoryContent(addons))
+      return false;
     items.SetProperty("reponame", g_localizeStrings.Get(24087));
     items.SetLabel(g_localizeStrings.Get(24087));
   }
@@ -381,7 +381,6 @@ static bool Repos(const CURL& path, CFileItemList &items)
   for (const auto& repo : addons)
   {
     CFileItemPtr item = CAddonsDirectory::FileItemFromAddon(repo, "addons://" + repo->ID(), true);
-    CAddonDatabase::SetPropertiesFromAddon(repo, item);
     items.Add(item);
   }
   items.SetContent("addons");
@@ -490,8 +489,6 @@ void CAddonsDirectory::GenerateAddonListing(const CURL &path,
     itemPath.SetFileName(addon->ID());
     CFileItemPtr pItem = FileItemFromAddon(addon, itemPath.Get(), false);
 
-    CAddonDatabase::SetPropertiesFromAddon(addon,pItem);
-
     AddonPtr localAddon;
     bool installed = CAddonMgr::GetInstance().GetAddon(addon->ID(), localAddon, ADDON_UNKNOWN, false);
     bool disabled = CAddonMgr::GetInstance().IsAddonDisabled(addon->ID());
@@ -504,13 +501,13 @@ void CAddonsDirectory::GenerateAddonListing(const CURL &path,
     if (installed)
       pItem->SetProperty("Addon.Status", g_localizeStrings.Get(305));
     if (disabled)
-      pItem->SetProperty("Addon.Status",g_localizeStrings.Get(24023));
-    if (addon->Props().broken == "DEPSNOTMET")
-      pItem->SetProperty("Addon.Status",g_localizeStrings.Get(24049));
-    else if (!addon->Props().broken.empty())
-      pItem->SetProperty("Addon.Status",g_localizeStrings.Get(24098));
+      pItem->SetProperty("Addon.Status", g_localizeStrings.Get(24023));
     if (hasUpdate)
-      pItem->SetProperty("Addon.Status",g_localizeStrings.Get(24068));
+      pItem->SetProperty("Addon.Status", g_localizeStrings.Get(24068));
+    if (addon->Broken() == "DEPSNOTMET")
+      pItem->SetProperty("Addon.Status", g_localizeStrings.Get(24049));
+    else if (!addon->Broken().empty())
+      pItem->SetProperty("Addon.Status", g_localizeStrings.Get(24098));
 
     items.Add(pItem);
   }
@@ -522,18 +519,28 @@ CFileItemPtr CAddonsDirectory::FileItemFromAddon(const AddonPtr &addon,
   if (!addon)
     return CFileItemPtr();
 
-  CFileItemPtr item(new CFileItem(path, folder));
+  CFileItemPtr item(new CFileItem(addon));
+  item->m_bIsFolder = folder;
+  item->SetPath(path);
 
   std::string strLabel(addon->Name());
   if (CURL(path).GetHostName() == "search")
     strLabel = StringUtils::Format("%s - %s", TranslateType(addon->Type(), true).c_str(), addon->Name().c_str());
   item->SetLabel(strLabel);
   item->SetArt("thumb", addon->Icon());
-  item->SetLabelPreformated(true);
   item->SetIconImage("DefaultAddon.png");
   if (URIUtils::IsInternetStream(addon->FanArt()) || CFile::Exists(addon->FanArt()))
     item->SetArt("fanart", addon->FanArt());
-  CAddonDatabase::SetPropertiesFromAddon(addon, item);
+
+  //TODO: fix hacks that depends on these
+  item->SetProperty("Addon.ID", addon->ID());
+  item->SetProperty("Addon.Name", addon->Name());
+  item->SetProperty("Addon.Version", addon->Version().asString());
+  item->SetProperty("Addon.Summary", addon->Summary());
+  const auto it = addon->Props().extrainfo.find("language");
+  if (it != addon->Props().extrainfo.end())
+    item->SetProperty("Addon.Language", it->second);
+
   return item;
 }
 

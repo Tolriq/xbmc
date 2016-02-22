@@ -145,7 +145,6 @@ CMMALVideo::~CMMALVideo()
 
   if (m_dec_input && m_dec_input->is_enabled)
     mmal_port_disable(m_dec_input);
-  m_dec_input = NULL;
 
   if (m_dec_output && m_dec_output->is_enabled)
     mmal_port_disable(m_dec_output);
@@ -162,8 +161,9 @@ CMMALVideo::~CMMALVideo()
       mmal_component_disable(m_dec);
 
   if (m_dec_input_pool)
-    mmal_pool_destroy(m_dec_input_pool);
+    mmal_port_pool_destroy(m_dec_input, m_dec_input_pool);
   m_dec_input_pool = NULL;
+  m_dec_input = NULL;
 
   if (m_deint)
     mmal_component_destroy(m_deint);
@@ -666,7 +666,7 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 
   // limit number of callback structures in video_decode to reduce latency. Too low and video hangs.
   // negative numbers have special meaning. -1=size of DPB -2=size of DPB+1
-  status = mmal_port_parameter_set_uint32(m_dec_input, MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS, -3);
+  status = mmal_port_parameter_set_uint32(m_dec_input, MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS, -5);
   if (status != MMAL_SUCCESS)
     CLog::Log(LOGERROR, "%s::%s Failed to configure max num callbacks on %s (status=%x %s)", CLASSNAME, __func__, m_dec_input->name, status, mmal_status_to_string(status));
 
@@ -749,6 +749,7 @@ void CMMALVideo::SetDropState(bool bDrop)
 {
   if (g_advancedSettings.CanLogComponent(LOGVIDEO))
     CLog::Log(LOGDEBUG, "%s::%s - bDrop(%d)", CLASSNAME, __func__, bDrop);
+  m_dropState = bDrop;
 }
 
 int CMMALVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
@@ -784,6 +785,8 @@ int CMMALVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
        buffer->length = (uint32_t)iSize > buffer->alloc_size ? buffer->alloc_size : (uint32_t)iSize;
        // set a flag so we can identify primary frames from generated frames (deinterlace)
        buffer->flags = MMAL_BUFFER_HEADER_FLAG_USER0;
+       if (m_dropState)
+         buffer->flags |= MMAL_BUFFER_HEADER_FLAG_USER3;
 
        memcpy(buffer->data, pData, buffer->length);
        iSize -= buffer->length;
@@ -938,6 +941,7 @@ void CMMALVideo::Reset(void)
   m_decoderPts = DVD_NOPTS_VALUE;
   m_demuxerPts = DVD_NOPTS_VALUE;
   m_codecControlFlags = 0;
+  m_dropState = false;
 }
 
 void CMMALVideo::SetSpeed(int iSpeed)
@@ -1015,6 +1019,8 @@ bool CMMALVideo::GetPicture(DVDVideoPicture* pDvdVideoPicture)
 
     pDvdVideoPicture->MMALBuffer->Acquire();
     pDvdVideoPicture->iFlags  = DVP_FLAG_ALLOCATED;
+    if (buffer->mmal_buffer->flags & MMAL_BUFFER_HEADER_FLAG_USER3)
+      pDvdVideoPicture->iFlags |= DVP_FLAG_DROPPED;
     if (g_advancedSettings.CanLogComponent(LOGVIDEO))
       CLog::Log(LOGINFO, "%s::%s dts:%.3f pts:%.3f flags:%x:%x MMALBuffer:%p mmal_buffer:%p", CLASSNAME, __func__,
           pDvdVideoPicture->dts == DVD_NOPTS_VALUE ? 0.0 : pDvdVideoPicture->dts*1e-6, pDvdVideoPicture->pts == DVD_NOPTS_VALUE ? 0.0 : pDvdVideoPicture->pts*1e-6,

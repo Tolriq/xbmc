@@ -1103,6 +1103,7 @@ void CActiveAE::Configure(AEAudioFormat *desiredFmt)
       m_currDevice.compare(device) != 0 ||
       m_settings.driver.compare(driver) != 0)
   {
+    FlushEngine();
     if (!InitSink())
       return;
     m_settings.driver = driver;
@@ -1243,6 +1244,11 @@ void CActiveAE::Configure(AEAudioFormat *desiredFmt)
         outputFormat.m_channelLayout = m_sinkRequestFormat.m_channelLayout;
         outputFormat.m_channelLayout.ResolveChannels(m_sinkFormat.m_channelLayout);
       }
+
+      // internally we use ffmpeg layouts, means that layout won't change in resample
+      // stage. preserve correct layout for sink stage where remapping is done
+      uint64_t avlayout = CAEUtil::GetAVChannelLayout(outputFormat.m_channelLayout);
+      outputFormat.m_channelLayout = CAEUtil::GetAEChannelLayout(avlayout);
 
       // TODO: adjust to decoder
       sinkInputFormat = outputFormat;
@@ -2711,6 +2717,7 @@ bool CActiveAE::IsSettingVisible(const std::string &settingId)
     AEAudioFormat format;
     format.m_dataFormat = AE_FMT_RAW;
     format.m_streamInfo.m_type = CAEStreamInfo::STREAM_TYPE_TRUEHD;
+    format.m_streamInfo.m_sampleRate = 192000;
     if (m_sink.SupportsFormat(CSettings::GetInstance().GetString(CSettings::SETTING_AUDIOOUTPUT_PASSTHROUGHDEVICE), format) &&
         CSettings::GetInstance().GetInt(CSettings::SETTING_AUDIOOUTPUT_CONFIG) != AE_CONFIG_FIXED)
       return true;
