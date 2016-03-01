@@ -176,8 +176,6 @@ x11_enabled="== X11 enabled. =="
 x11_disabled="== X11 disabled. =="
 pulse_not_found="== Could not find libpulse. PulseAudio support disabled. =="
 pulse_disabled="== PulseAudio support disabled. =="
-dvdcss_enabled="== DVDCSS support enabled. =="
-dvdcss_disabled="== DVDCSS support disabled. =="
 avahi_not_found="== Could not find libavahi-common or libavahi-client. Avahi support disabled. =="
 avahi_disabled="== Avahi support disabled. =="
 mdnsembedded_not_found="== Could not find mDNSEmbedded. Might prevent zeroconf support. =="
@@ -376,12 +374,6 @@ AC_ARG_ENABLE([upnp],
   [use_upnp=$enableval],
   [use_upnp=yes])
 
-AC_ARG_ENABLE([dvdcss],
-  [AS_HELP_STRING([--enable-dvdcss],
-  [enable DVDCSS support (default is yes)])],
-  [use_dvdcss=$enableval],
-  [use_dvdcss=yes])
-
 AC_ARG_ENABLE([mid],
   [AS_HELP_STRING([--enable-mid],
   [enable MID support (default is no)])],
@@ -541,6 +533,7 @@ NM="${NM:-nm}"
 case $host in
   i*86*-linux-android*)
      target_platform=target_android
+     CORE_SYSTEM_NAME=android
      ARCH="i486-linux"
      use_arch="x86"
      use_cpu="i686"
@@ -552,6 +545,7 @@ case $host in
      ;;
   i*86*-linux-gnu*|i*86*-*-linux-uclibc*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="i486-linux"
      if test "$use_cpu" = "no" -a "$cross_compiling" = "yes";  then
         use_arch="x86"
@@ -574,6 +568,7 @@ case $host in
      ;;
   x86_64-*-linux-gnu*|x86_64-*-linux-uclibc*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="x86_64-linux"
      if test "$use_cpu" = "no" -a "$cross_compiling" = "yes";  then
         use_arch="x86_64"
@@ -583,15 +578,18 @@ case $host in
      ;;
   i386-*-freebsd*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="x86-freebsd"
      MAKE="gmake"
      ;;
   amd64-*-freebsd*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="x86_64-freebsd"
      MAKE="gmake"
      ;;
   arm-apple-darwin*)
+     CORE_SYSTEM_NAME=ios
      use_joystick=no
      use_neon=yes
      use_libcec=no
@@ -611,6 +609,7 @@ case $host in
      AC_SUBST([DEPENDS_ROOT_FOR_XCODE])
      ;;
   *86*-apple-darwin*)
+     CORE_SYSTEM_NAME=osx
      use_joystick=no
      use_vtbdecoder=no
      ARCH="x86-osx"
@@ -618,6 +617,7 @@ case $host in
      AC_SUBST([DEPENDS_ROOT_FOR_XCODE])
      ;;
   powerpc-apple-darwin*)
+     CORE_SYSTEM_NAME=osx
      use_joystick=no
      use_vtbdecoder=no
      ARCH="powerpc-osx"
@@ -626,13 +626,16 @@ case $host in
      AC_SUBST([DEPENDS_ROOT_FOR_XCODE])
      ;;
   powerpc-*-linux-gnu*|powerpc-*-linux-uclibc*)
+     CORE_SYSTEM_NAME=linux
      ARCH="powerpc-linux"
      ;;
   powerpc64-*-linux-gnu*|powerpc64-*-linux-uclibc*)
+     CORE_SYSTEM_NAME=linux
      ARCH="powerpc64-linux"
      ;;
   arm*-*-linux-gnu*|arm*-*-linux-uclibc*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="arm"
      use_arch="arm"
      use_joystick=no
@@ -643,6 +646,7 @@ case $host in
      ;;
   arm*-*linux-android*)
      target_platform=target_android
+     CORE_SYSTEM_NAME=android
      use_arch="arm"
      use_cpu=cortex-a9
      ARCH="arm"
@@ -655,6 +659,7 @@ case $host in
      ;;
   mips*-*-linux-gnu*)
      target_platform=target_linux
+     CORE_SYSTEM_NAME=linux
      ARCH="mips"
      use_arch="mips"
      use_joystick=no
@@ -672,7 +677,6 @@ if test "$target_platform" = "target_android" ; then
   USE_ANDROID=1
   webserver_checkdepends=yes
   CFLAGS="$CFLAGS -Wno-psabi"
-  DROID_DVDLIB_SEEK64="-D_FILE_OFFSET_BITS=64 -D_OFF_T_DEFINED_ -Doff_t=off64_t -Dlseek=lseek64"
   CXXFLAGS="$CXXFLAGS -Wno-psabi"
   AC_DEFINE(HAS_EGLGLES, [1], [Define if supporting EGL based GLES Framebuffer])
 fi
@@ -694,6 +698,7 @@ if test "$target_platform" = "target_raspberry_pi" ; then
      use_arch="arm"
      use_hardcoded_tables="yes"
      use_openmax=no
+     CORE_SYSTEM_NAME=rbpi
      ARCH="arm"
      AC_DEFINE(HAS_EGLGLES, [1], [Define if supporting EGL based GLES Framebuffer])
      USE_OMXLIB=1; AC_DEFINE([HAVE_OMXLIB],[1],["Define to 1 if OMX libs is enabled"])
@@ -1764,6 +1769,7 @@ fi
 case $add_players in
   *omxplayer*)
       XB_ADD_PLAYER([OMXPLAYER], [omxplayer])
+      CORE_SYSTEM_VARIANT=omx
       ;;
 esac
 
@@ -1772,13 +1778,15 @@ esac
 for codecs in `echo $add_codecs | sed 's/,/ /g'`; do
   case $codecs in
     *amcodec*)
-        AC_CHECK_HEADER([amcodec/codec_error.h],, AC_MSG_ERROR($missing_headers))
-        XB_ADD_CODEC([LIBAMCODEC], [amcodec], [$codecs])
-        ;;
+      AC_CHECK_HEADER([amcodec/codec_error.h],, AC_MSG_ERROR($missing_headers))
+      XB_ADD_CODEC([LIBAMCODEC], [amcodec], [$codecs])
+      CORE_SYSTEM_VARIANT=aml
+      ;;
     *imxvpu*)
       AC_CHECK_HEADER([imx-mm/vpu/vpu_wrapper.h],, AC_MSG_ERROR($missing_headers))
       AC_CHECK_LIB([vpu], main, LIBS="$LIBS -lfslvpuwrap -lvpu -lg2d", AC_MSG_ERROR($missing_library))
       XB_ADD_CODEC([IMXVPU], [imxvpu], [$codecs])
+      CORE_SYSTEM_VARIANT=imx
       CXXFLAGS="$CXXFLAGS -Wno-psabi -DLINUX "
       CFLAGS="$CFLAGS -DLINUX"
       if test "$use_x11" = "no"; then
@@ -1864,6 +1872,7 @@ AC_C_BIGENDIAN
 
 if test "$cross_compiling" = "yes"; then
   final_message="$final_message\n  Crosscomp.:\tYes"
+  CROSS_COMPILING=yes
   if [[ -d "$NATIVE_ROOT" ]]; then
     CFLAGS_FOR_BUILD="$CFLAGS_FOR_BUILD -I$NATIVE_ROOT/include"
     CXXFLAGS_FOR_BUILD="$CXXFLAGS_FOR_BUILD -I$NATIVE_ROOT/include"
@@ -2026,24 +2035,6 @@ if test "x$use_pulse" != "xno"; then
 else
   XBMC_STANDALONE_SH_PULSE=/dev/null
   final_message="$final_message\n  PulseAudio:\tNo"
-fi
-
-# DVDCSS
-if test "$use_dvdcss" = "yes"; then
-  AC_MSG_NOTICE($dvdcss_enabled)
-  final_message="$final_message\n  DVDCSS:\tYes"
-  BUILD_DVDCSS=1
-  SKIP_CONFIG_DVDCSS=0
-  DVDREAD_CFLAGS="-D_XBMC -DHAVE_DVDCSS_DVDCSS_H"
-else
-  AC_MSG_NOTICE($dvdcss_disabled)
-  final_message="$final_message\n  DVDCSS:\tNo"
-  BUILD_DVDCSS=0
-  SKIP_CONFIG_DVDCSS=1
-  DVDREAD_CFLAGS="-D_XBMC -UHAVE_DVDCSS_DVDCSS_H"
-fi
-if test "$host_vendor" = "apple"; then
- DVDREAD_CFLAGS="$DVDREAD_CFLAGS -D__DARWIN__"
 fi
 
 # Google Test Framework
@@ -2237,6 +2228,7 @@ OUTPUT_FILES="Makefile \
     xbmc/cores/VideoPlayer/DVDCodecs/Video/Makefile \
     xbmc/cores/VideoPlayer/DVDDemuxers/Makefile \
     xbmc/cores/VideoPlayer/DVDSubtitles/Makefile \
+    xbmc/cores/VideoPlayer/Process/Makefile \
     xbmc/cores/AudioEngine/Makefile \
     xbmc/cores/paplayer/Makefile \
     xbmc/cores/omxplayer/Makefile \
@@ -2339,6 +2331,8 @@ AC_CONFIG_FILES([.dummy])
 AC_CONFIG_FILES([${OUTPUT_FILES}])
 OUTPUT_FILES="$OUTPUT_FILES \
   .dummy"
+AC_SUBST(CORE_SYSTEM_NAME)
+AC_SUBST(CORE_SYSTEM_VARIANT)
 AC_SUBST(CFLAGS)
 AC_SUBST(CXXFLAGS)
 AC_SUBST(INCLUDES)
@@ -2349,7 +2343,6 @@ AC_SUBST(CFLAGS_FOR_BUILD)
 AC_SUBST(CXXFLAGS_FOR_BUILD)
 AC_SUBST(LDFLAGS_FOR_BUILD)
 AC_SUBST(SDL_DEFINES)
-AC_SUBST(BUILD_DVDCSS)
 AC_SUBST(FFMPEG_LIBDIR)
 AC_SUBST(USE_STATIC_FFMPEG)
 AC_SUBST(GNUTLS_ALL_LIBS)
@@ -2397,6 +2390,7 @@ AC_SUBST(USE_SSE4)
 AC_SUBST(USE_MMAL)
 AC_SUBST(USE_X11)
 AC_SUBST(USE_BREAKPAD)
+AC_SUBST(CROSS_COMPILING)
 
 # pushd and popd are not available in other shells besides bash, so implement
 # our own pushd/popd functions
@@ -2447,51 +2441,6 @@ else
 fi
 ])
 ])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdcss], [
-  ./configure \
-    CC="$CC" \
-    CXX="$CXX" \
-    CFLAGS="$CFLAGS $DROID_DVDLIB_SEEK64" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --disable-doc \
-    --enable-static \
-    --with-pic
-], [$SKIP_CONFIG_DVDCSS])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdread], [
-  ./configure2 \
-    --extra-cflags="$CFLAGS $DVDREAD_CFLAGS -I`pwd`/../libdvdcss/src $DROID_DVDLIB_SEEK64" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --enable-static \
-    --disable-shared \
-    --disable-strip \
-    --disable-opts \
-    --cc="$CC" &&
-  mkdir -p `pwd`/../includes/dvdread
-  cp `pwd`/../libdvdread/src/*.h `pwd`/../includes/dvdread
-  cp `pwd`/../libdvdread/src/dvdread/*.h `pwd`/../includes/dvdread
-], [0])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdnav], [
-  ./configure2 \
-    --extra-cflags="$CFLAGS $DVDREAD_CFLAGS -I`pwd`/../includes $DROID_DVDLIB_SEEK64" \
-    --extra-ldflags="-L`pwd`/../libdvdread/obj" \
-    --with-dvdread-config="`pwd`/../dvdread-config" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --enable-static \
-    --disable-shared \
-    --cc="$CC"
-], [0])
 
 XB_CONFIG_MODULE([lib/cpluff], [
   ./configure --disable-nls \

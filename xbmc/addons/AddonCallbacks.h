@@ -21,14 +21,14 @@
 
 #include <stdint.h>
 
-#include "../../addons/library.kodi.guilib/libKODI_guilib.h"
-#include "../../addons/library.kodi.adsp/libKODI_adsp.h"
-#include "../../addons/library.kodi.audioengine/libKODI_audioengine.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/libKODI_guilib.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/libKODI_adsp.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/libKODI_audioengine.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/kodi_adsp_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/kodi_audioengine_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_codec_types.h"
 #include "cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h"
-#include "addons/include/kodi_adsp_types.h"
-#include "addons/include/kodi_audioengine_types.h"
-#include "addons/include/xbmc_pvr_types.h"
-#include "addons/include/xbmc_codec_types.h"
 
 #ifdef TARGET_WINDOWS
 #ifndef _SSIZE_T_DEFINED
@@ -58,6 +58,7 @@ typedef int64_t (*AddOnSeekFile)(const void* addonData, void* file, int64_t iFil
 typedef int (*AddOnTruncateFile)(const void* addonData, void* file, int64_t iSize);
 typedef int64_t (*AddOnGetFilePosition)(const void* addonData, void* file);
 typedef int64_t (*AddOnGetFileLength)(const void* addonData, void* file);
+typedef double(*AddOnGetFileDownloadSpeed)(const void* addonData, void* file);
 typedef void (*AddOnCloseFile)(const void* addonData, void* file);
 typedef int (*AddOnGetFileChunkSize)(const void* addonData, void* file);
 typedef bool (*AddOnFileExists)(const void* addonData, const char *strFileName, bool bUseCache);
@@ -69,6 +70,9 @@ typedef bool (*AddOnDirectoryExists)(const void* addonData, const char *strPath)
 typedef bool (*AddOnRemoveDirectory)(const void* addonData, const char *strPath);
 typedef bool (*AddOnGetDirectory)(const void* addonData, const char *strPath, const char* mask, VFSDirEntry** items, unsigned int* num_items);
 typedef void (*AddOnFreeDirectory)(const void* addonData, VFSDirEntry* items, unsigned int num_items);
+typedef void* (*AddOnCURLCreate)(const void* addonData, const char* strURL);
+typedef bool(*AddOnCURLAddOption)(const void* addonData, void* file, XFILE::CURLOPTIONTYPE type, const char* name, const char * value);
+typedef bool(*AddOnCURLOpen)(const void* addonData, void* file, unsigned int flags);
 
 typedef struct CB_AddOn
 {
@@ -81,27 +85,31 @@ typedef struct CB_AddOn
   AddOnGetDVDMenuLanguage GetDVDMenuLanguage;
   AddOnFreeString         FreeString;
 
-  AddOnOpenFile           OpenFile;
-  AddOnOpenFileForWrite   OpenFileForWrite;
-  AddOnReadFile           ReadFile;
-  AddOnReadFileString     ReadFileString;
-  AddOnWriteFile          WriteFile;
-  AddOnFlushFile          FlushFile;
-  AddOnSeekFile           SeekFile;
-  AddOnTruncateFile       TruncateFile;
-  AddOnGetFilePosition    GetFilePosition;
-  AddOnGetFileLength      GetFileLength;
-  AddOnCloseFile          CloseFile;
-  AddOnGetFileChunkSize   GetFileChunkSize;
-  AddOnFileExists         FileExists;
-  AddOnStatFile           StatFile;
-  AddOnDeleteFile         DeleteFile;
-  AddOnCanOpenDirectory   CanOpenDirectory;
-  AddOnCreateDirectory    CreateDirectory;
-  AddOnDirectoryExists    DirectoryExists;
-  AddOnRemoveDirectory    RemoveDirectory;
-  AddOnGetDirectory       GetDirectory;
-  AddOnFreeDirectory      FreeDirectory;
+  AddOnOpenFile               OpenFile;
+  AddOnOpenFileForWrite       OpenFileForWrite;
+  AddOnReadFile               ReadFile;
+  AddOnReadFileString         ReadFileString;
+  AddOnWriteFile              WriteFile;
+  AddOnFlushFile              FlushFile;
+  AddOnSeekFile               SeekFile;
+  AddOnTruncateFile           TruncateFile;
+  AddOnGetFilePosition        GetFilePosition;
+  AddOnGetFileLength          GetFileLength;
+  AddOnGetFileDownloadSpeed   GetFileDownloadSpeed;
+  AddOnCloseFile              CloseFile;
+  AddOnGetFileChunkSize       GetFileChunkSize;
+  AddOnFileExists             FileExists;
+  AddOnStatFile               StatFile;
+  AddOnDeleteFile             DeleteFile;
+  AddOnCanOpenDirectory       CanOpenDirectory;
+  AddOnCreateDirectory        CreateDirectory;
+  AddOnDirectoryExists        DirectoryExists;
+  AddOnRemoveDirectory        RemoveDirectory;
+  AddOnGetDirectory           GetDirectory;
+  AddOnFreeDirectory          FreeDirectory;
+  AddOnCURLCreate             CURLCreate;
+  AddOnCURLAddOption          CURLAddOption;
+  AddOnCURLOpen               CURLOpen;
 } CB_AddOnLib;
 
 typedef xbmc_codec_t (*CODECGetCodecByName)(const void* addonData, const char* strCodecName);

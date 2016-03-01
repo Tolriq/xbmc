@@ -50,6 +50,7 @@
 #include "DVDDemuxers/DVDDemuxCC.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
+#include "cores/VideoPlayer/Process/ProcessInfo.h"
 #ifdef HAS_PERFORMANCE_SAMPLE
 #include "xbmc/utils/PerformanceSample.h"
 #else
@@ -571,18 +572,18 @@ void CVideoPlayer::CreatePlayers()
   if (m_omxplayer_mode)
   {
 #ifdef HAS_OMXPLAYER
-    m_VideoPlayerVideo = new OMXPlayerVideo(&m_OmxPlayerState.av_clock, &m_overlayContainer, m_messenger, m_renderManager);
-    m_VideoPlayerAudio = new OMXPlayerAudio(&m_OmxPlayerState.av_clock, m_messenger);
+    m_VideoPlayerVideo = new OMXPlayerVideo(&m_OmxPlayerState.av_clock, &m_overlayContainer, m_messenger, m_renderManager, *m_processInfo);
+    m_VideoPlayerAudio = new OMXPlayerAudio(&m_OmxPlayerState.av_clock, m_messenger, *m_processInfo);
 #endif
   }
   else
   {
-    m_VideoPlayerVideo = new CVideoPlayerVideo(&m_clock, &m_overlayContainer, m_messenger, m_renderManager);
-    m_VideoPlayerAudio = new CVideoPlayerAudio(&m_clock, m_messenger);
+    m_VideoPlayerVideo = new CVideoPlayerVideo(&m_clock, &m_overlayContainer, m_messenger, m_renderManager, *m_processInfo);
+    m_VideoPlayerAudio = new CVideoPlayerAudio(&m_clock, m_messenger, *m_processInfo);
   }
-  m_VideoPlayerSubtitle = new CVideoPlayerSubtitle(&m_overlayContainer);
-  m_VideoPlayerTeletext = new CDVDTeletextData();
-  m_VideoPlayerRadioRDS = new CDVDRadioRDSData();
+  m_VideoPlayerSubtitle = new CVideoPlayerSubtitle(&m_overlayContainer, *m_processInfo);
+  m_VideoPlayerTeletext = new CDVDTeletextData(*m_processInfo);
+  m_VideoPlayerRadioRDS = new CDVDRadioRDSData(*m_processInfo);
   m_players_created = true;
 }
 
@@ -649,6 +650,7 @@ CVideoPlayer::CVideoPlayer(IPlayerCallback& callback)
   m_omxplayer_mode                     = false;
 #endif
 
+  m_processInfo = CProcessInfo::CreateInstance();
   CreatePlayers();
 
   m_displayLost = false;
@@ -1327,10 +1329,6 @@ void CVideoPlayer::Process()
       if (!m_pInputStream->IsStreamType(DVDSTREAM_TYPE_PVRMANAGER) ||
           !m_SelectionStreams.m_Streams.empty())
         OpenDefaultStreams();
-
-      // never allow first frames after open to be skipped
-      if( m_VideoPlayerVideo->IsInited() )
-        m_VideoPlayerVideo->SendMessage(new CDVDMsg(CDVDMsg::VIDEO_NOSKIP));
 
       UpdateApplication(0);
       UpdatePlayState(0);
@@ -2256,7 +2254,7 @@ void CVideoPlayer::CheckAutoSceneSkip()
     /*
      * Seeking is NOT flushed so any content up to the demux point is retained when playing forwards.
      */
-    m_messenger.Put(new CDVDMsgPlayerSeek(seek, true, m_omxplayer_mode, true, false, true));
+    m_messenger.Put(new CDVDMsgPlayerSeek(seek, true, false, m_omxplayer_mode, true, false, true));
     /*
      * Seek doesn't always work reliably. Last physical seek time is recorded to prevent looping
      * if there was an error with seeking and it landed somewhere unexpected, perhaps back in the
@@ -2274,7 +2272,7 @@ void CVideoPlayer::CheckAutoSceneSkip()
     /*
      * Seeking is NOT flushed so any content up to the demux point is retained when playing forwards.
      */
-    m_messenger.Put(new CDVDMsgPlayerSeek(cut.end + 1, true, m_omxplayer_mode, true, false, true));
+    m_messenger.Put(new CDVDMsgPlayerSeek(cut.end + 1, true, false, m_omxplayer_mode, true, false, true));
     /*
      * Each commercial break is only skipped once so poorly detected commercial breaks can be
      * manually re-entered. Start and end are recorded to prevent looping and to allow seeking back
@@ -2952,7 +2950,7 @@ void CVideoPlayer::Seek(bool bPlus, bool bLargeStep, bool bChapterOverride)
   if (!m_State.canseek)
     return;
 
-  if (bLargeStep && bChapterOverride && GetChapter() > 0)
+  if (bLargeStep && bChapterOverride && GetChapter() > 0 && GetChapterCount() > 1)
   {
     if (!bPlus)
     {
@@ -3821,7 +3819,6 @@ void CVideoPlayer::FlushBuffers(bool queued, double pts, bool accurate, bool syn
   {
     m_VideoPlayerAudio->SendMessage(new CDVDMsg(CDVDMsg::GENERAL_RESET));
     m_VideoPlayerVideo->SendMessage(new CDVDMsg(CDVDMsg::GENERAL_RESET));
-    m_VideoPlayerVideo->SendMessage(new CDVDMsg(CDVDMsg::VIDEO_NOSKIP));
     m_VideoPlayerSubtitle->SendMessage(new CDVDMsg(CDVDMsg::GENERAL_RESET));
     m_VideoPlayerTeletext->SendMessage(new CDVDMsg(CDVDMsg::GENERAL_RESET));
     m_VideoPlayerRadioRDS->SendMessage(new CDVDMsg(CDVDMsg::GENERAL_RESET));

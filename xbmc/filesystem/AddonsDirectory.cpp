@@ -50,7 +50,6 @@ const auto CATEGORY_INFO_PROVIDERS = "category.infoproviders";
 const auto CATEGORY_LOOK_AND_FEEL = "category.lookandfeel";
 
 const std::set<TYPE> dependencyTypes = {
-    ADDON_VIZ_LIBRARY,
     ADDON_SCRAPER_LIBRARY,
     ADDON_SCRIPT_LIBRARY,
     ADDON_SCRIPT_MODULE,
@@ -98,12 +97,6 @@ static bool IsDependecyType(TYPE type)
   return dependencyTypes.find(type) != dependencyTypes.end();
 }
 
-static bool IsSystemAddon(const AddonPtr& addon)
-{
-  return StringUtils::StartsWith(addon->Path(), CSpecialProtocol::TranslatePath("special://xbmc/addons"));
-}
-
-
 static bool IsUserInstalled(const AddonPtr& addon)
 {
   return std::find_if(dependencyTypes.begin(), dependencyTypes.end(),
@@ -113,7 +106,7 @@ static bool IsUserInstalled(const AddonPtr& addon)
 
 static bool IsOrphaned(const AddonPtr& addon, const VECADDONS& all)
 {
-  if (IsSystemAddon(addon) || IsUserInstalled(addon))
+  if (CAddonMgr::GetInstance().IsSystemAddon(addon->ID()) || IsUserInstalled(addon))
     return false;
 
   for (const AddonPtr& other : all)
@@ -537,8 +530,8 @@ CFileItemPtr CAddonsDirectory::FileItemFromAddon(const AddonPtr &addon,
   item->SetProperty("Addon.Name", addon->Name());
   item->SetProperty("Addon.Version", addon->Version().asString());
   item->SetProperty("Addon.Summary", addon->Summary());
-  const auto it = addon->Props().extrainfo.find("language");
-  if (it != addon->Props().extrainfo.end())
+  const auto it = addon->ExtraInfo().find("language");
+  if (it != addon->ExtraInfo().end())
     item->SetProperty("Addon.Language", it->second);
 
   return item;

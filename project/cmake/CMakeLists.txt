@@ -37,6 +37,7 @@ if(UNIX)
   option(ENABLE_UDEV        "Enable UDev support?" ON)
   option(ENABLE_OPENGL      "Enable OpenGL?" ON)
   option(ENABLE_OPENGLES    "Enable OpenGLES?" ON)
+  option(ENABLE_OPENSSL     "Enable OpenSSL?" ON)
   option(ENABLE_SDL         "Enable SDL?" OFF)
   option(ENABLE_X11         "Enable X11 support?" ON)
   option(ENABLE_EGL         "Enable EGL?" OFF)
@@ -91,9 +92,12 @@ set(required_deps Sqlite3 FreeType PCRE Cpluff
                   TinyXML Python Yajl Xslt
                   JPEG Lzo2 Fribidi TagLib FFMPEG CrossGUID)
 if(NOT WIN32)
-  list(APPEND required_deps LibSmbClient OpenSSL ZLIB)
+  list(APPEND required_deps LibSmbClient ZLIB)
 else()
   list(APPEND required_deps D3DX11Effects)
+endif()
+if(CORE_SYSTEM_NAME STREQUAL android)
+  list(APPEND required_deps Zip)
 endif()
 
 # Optional dependencies
@@ -138,6 +142,11 @@ foreach(dep ${dyload_optional})
   core_optional_dyload_dep(${dep})
 endforeach()
 
+if(ENABLE_OPENSSL)
+  core_require_dep(OpenSSL)
+  list(APPEND DEP_DEFINES "-DHAVE_OPENSSL=1")
+endif()
+
 if(ENABLE_UPNP)
   list(APPEND DEP_DEFINES "-DUSE_UPNP=1")
 endif()
@@ -177,6 +186,7 @@ if(NOT WIN32)
     if(OPENGLES_FOUND)
       core_optional_dep(EGL ENABLE_EGL)
       core_optional_dep(OMX ENABLE_OMX)
+      core_optional_dep(AML ENABLE_AML)
       core_optional_dep(X ENABLE_X11)
       core_optional_dep(Sdl)
     endif()
@@ -262,6 +272,9 @@ add_custom_target(pack-skins ALL
                   DEPENDS TexturePacker::TexturePacker export-files ${XBT_FILES})
 
 core_link_library(exif system/libexif)
+if(CORE_SYSTEM_NAME STREQUAL linux)
+  core_link_library(sse4 system/libsse4)
+endif()
 
 core_link_library(XBMC_addon addons/library.xbmc.addon/libXBMC_addon)
 core_link_library(XBMC_codec addons/library.xbmc.codec/libXBMC_codec)
@@ -273,8 +286,13 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/system/players/VideoPlayer)
 add_custom_target(wrap-libraries ALL DEPENDS ${WRAP_FILES})
 
 set(LIBCEC_SONAME "${CEC_SONAME}")
-configure_file(${CORE_SOURCE_DIR}/xbmc/DllPaths_generated.h.in
-               ${CORE_BUILD_DIR}/DllPaths_generated.h @ONLY)
+if(NOT CORE_SYSTEM_NAME STREQUAL windows AND NOT CORE_SYSTEM_NAME STREQUAL android)
+  configure_file(${CORE_SOURCE_DIR}/xbmc/DllPaths_generated.h.in
+                 ${CORE_BUILD_DIR}/DllPaths_generated.h @ONLY)
+elseif(CORE_SYSTEM_NAME STREQUAL android)
+  configure_file(${CORE_SOURCE_DIR}/xbmc/DllPaths_generated_android.h.in
+                 ${CORE_BUILD_DIR}/DllPaths_generated_android.h @ONLY)
+endif()
 
 # Codegen
 add_subdirectory(${CORE_SOURCE_DIR}/xbmc/interfaces/swig build/swig)

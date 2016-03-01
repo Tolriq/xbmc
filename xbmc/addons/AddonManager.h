@@ -167,6 +167,10 @@ namespace ADDON
     */
     bool CanAddonBeInstalled(const AddonPtr& addon);
 
+    bool CanUninstall(const AddonPtr& addon);
+
+    bool IsSystemAddon(const std::string& id);
+
     bool AddToUpdateBlacklist(const std::string& id);
     bool RemoveFromUpdateBlacklist(const std::string& id);
     bool IsBlacklisted(const std::string& id) const;
@@ -253,8 +257,6 @@ namespace ADDON
      */
     static bool PlatformSupportsAddon(const cp_plugin_info_t *info);
 
-    static bool CheckUserDirs(const cp_cfg_element_t *element);
-
     bool GetAddonsInternal(const TYPE &type, VECADDONS &addons, bool enabledOnly);
 
     // private construction, and no assignements; use the provided singleton methods
@@ -268,6 +270,7 @@ namespace ADDON
     static std::map<TYPE, IAddonMgrCallback*> m_managers;
     CCriticalSection m_critSection;
     CAddonDatabase m_database;
+    std::set<std::string> m_systemAddons;
   };
 
 }; /* namespace ADDON */

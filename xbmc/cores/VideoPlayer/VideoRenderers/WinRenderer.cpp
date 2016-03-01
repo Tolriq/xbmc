@@ -211,7 +211,7 @@ bool CWinRenderer::Configure(unsigned int width, unsigned int height, unsigned i
 
   // calculate the input frame aspect ratio
   CalculateFrameAspectRatio(d_width, d_height);
-  RESOLUTION_INFO res = g_graphicsContext.GetResInfo(RES_DESKTOP);
+  RESOLUTION_INFO res = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
   m_destWidth = res.iWidth;
   m_destHeight = res.iHeight;
   SetViewMode(CMediaSettings::GetInstance().GetCurrentVideoSettings().m_ViewMode);
@@ -868,11 +868,31 @@ void CWinRenderer::RenderHW(DWORD flags)
   CRect target = CRect(0.0f, 0.0f,
                        static_cast<float>(m_IntermediateTarget.GetWidth()), 
                        static_cast<float>(m_IntermediateTarget.GetHeight()));
+  if (m_capture)
+  {
+    target.x2 = m_capture->GetWidth();
+    target.y2 = m_capture->GetHeight();
+  }
   CWIN32Util::CropSource(src, dst, target, m_renderOrientation);
 
-  m_processor->Render(src, dst, m_IntermediateTarget.Get(), views, flags, image->frameIdx, m_renderOrientation);
+  ID3D11RenderTargetView* pView = nullptr;
+  ID3D11Resource* pResource = m_IntermediateTarget.Get();
+  if (m_capture)
+  {
+    g_Windowing.Get3D11Context()->OMGetRenderTargets(1, &pView, nullptr);
+    if (pView)
+      pView->GetResource(&pResource);
+  }
 
-  if (!m_bUseHQScaler)
+  m_processor->Render(src, dst, pResource, views, flags, image->frameIdx, m_renderOrientation);
+
+  if (m_capture)
+  {
+    SAFE_RELEASE(pResource);
+    SAFE_RELEASE(pView);
+  }
+
+  if (!m_bUseHQScaler && !m_capture)
   {
     CRect oldViewPort;
     bool stereoHack = g_graphicsContext.GetStereoMode() == RENDER_STEREO_MODE_SPLIT_HORIZONTAL
@@ -918,7 +938,9 @@ bool CWinRenderer::RenderCapture(CRenderCapture* capture)
   capture->BeginRender();
   if (capture->GetState() != CAPTURESTATE_FAILED)
   {
+    m_capture = capture;
     Render(0);
+    m_capture = nullptr;
     capture->EndRender();
     succeeded = true;
   }
